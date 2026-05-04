@@ -1,15 +1,15 @@
 # Production ML Pipeline with FastAPI
 
-Credit scoring prediction API powered by a scikit-learn model.
+A production-ready credit scoring API using FastAPI with scikit-learn model serving.
 
 ## Overview
 
-This project provides a REST API for credit default prediction. It loads pre-trained model artifacts and serves predictions via FastAPI.
+This project serves a trained credit scoring model via a FastAPI REST API. It loads pre-trained artifacts (model, scaler, feature names) and exposes endpoints for single and batch predictions.
 
 ## API Endpoints
 
 ### `GET /health`
-Health check endpoint.
+Health check endpoint. Returns whether the model is loaded and the service is operational.
 
 **Response:**
 ```json
@@ -20,7 +20,7 @@ Health check endpoint.
 ```
 
 ### `POST /predict`
-Predict credit default probability.
+Predict credit approval and default probability.
 
 **Request Body:**
 ```json
@@ -50,37 +50,36 @@ Predict credit default probability.
 - `medium`: probability 0.15 – 0.35
 - `high`: probability > 0.35
 
-**Approval:** loan is approved when `default_probability < 0.35`.
+## Local Development
 
-## Deployment
-
-### Local Development
 ```bash
 pip install -r requirements.txt
 python run_api.py
 ```
-API available at `http://localhost:8000`. Swagger docs at `http://localhost:8000/docs`.
 
-### Production
-```bash
-pip install -r requirements.txt
-uvicorn src.api:app --host 0.0.0.0 --port 8000
-```
+API available at `http://localhost:8000`. API docs at `http://localhost:8000/docs`.
 
-### Docker
-```bash
-docker build -t credit-api .
-docker run -p 8000:8000 credit-api
-```
+## Running Tests
 
-## Testing
 ```bash
+pip install pytest httpx
 pytest tests/
+```
+
+## Deployment
+
+Deploy to any platform that supports Python:
+- Railway, Render, Fly.io, Heroku, Docker
+
+Example Docker build:
+```dockerfile
+FROM python:3.11-slim
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+COPY . .
+CMD ["python", "run_api.py"]
 ```
 
 ## Model Artifacts
 
-Artifacts are downloaded from the [credit-scoring-pipeline](https://github.com/MB-Ndhlovu/credit-scoring-pipeline) repo:
-- `credit_model.pkl` – trained classifier
-- `scaler.pkl` – feature scaler
-- `feature_names.pkl` – expected feature names
+The model artifacts (`credit_model.pkl`, `scaler.pkl`, `feature_names.pkl`) are downloaded from the [credit-scoring-pipeline](https://github.com/MB-Ndhlovu/credit-scoring-pipeline) repository on startup.

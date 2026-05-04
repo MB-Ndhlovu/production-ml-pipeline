@@ -1,35 +1,54 @@
-"""FastAPI application with /health and /predict endpoints."""
-from fastapi import FastAPI
-from src.predict import PredictInput, PredictOutput, predict_default
-from src.model import is_model_loaded, load_artifacts
+"""FastAPI application for credit scoring API."""
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import JSONResponse
+
+from src.model import load_artifacts, is_model_loaded
+from src.predict import PredictionInput, PredictionOutput, make_prediction
 
 app = FastAPI(
     title="Credit Scoring API",
-    description="Production ML pipeline for credit default prediction.",
+    description="Production ML pipeline for credit default prediction",
     version="1.0.0",
 )
 
-# Load artifacts on startup
-load_artifacts()
+_loaded = False
 
 
-@app.get("/health", response_model=dict, tags=["health"])
-def health_check() -> dict:
+@app.on_event("startup")
+async def startup():
+    """Load model artifacts on startup."""
+    global _loaded
+    _loaded = load_artifacts()
+
+
+@app.get("/health", tags=["Health"])
+async def health():
     """
     Health check endpoint.
 
-    Returns the current status of the service and whether the model is loaded.
+    Returns whether the service is operational and the model is loaded.
     """
-    return {"status": "ok", "model_loaded": is_model_loaded()}
+    return JSONResponse(
+        content={
+            "status": "ok",
+            "model_loaded": _loaded,
+        }
+    )
 
 
-@app.post("/predict", response_model=PredictOutput, tags=["prediction"])
-def predict(input_data: PredictInput) -> PredictOutput:
+@app.post("/predict", response_model=PredictionOutput, tags=["Prediction"])
+async def predict(input_data: PredictionInput):
     """
-    Predict credit default probability.
+    Predict credit approval and default probability.
 
-    Returns the approval decision, default probability, and risk band.
-    Risk bands: low (prob < 0.15), medium (0.15–0.35), high (prob > 0.35).
-    Approval threshold: probability < 0.35.
+    Accepts applicant features and returns approval decision,
+    probability of default, and risk classification.
     """
-    return predict_default(input_data)
+    if not _loaded:
+        raise HTTPException(status_code=503, detail="Model not loaded")
+
+    try:
+        result = make_prediction(input_data.model_dump())
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
