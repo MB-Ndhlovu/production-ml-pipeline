@@ -1,48 +1,43 @@
-from fastapi import FastAPI, HTTPException
-from src.predict import PredictionInput, predict_default
+from fastapi import FastAPI
+from src.predict import CreditApplication, PredictionResult
+from src.model import load_artifacts, is_model_loaded
 
 app = FastAPI(
-    title="Credit Risk Scoring API",
-    description="Predicts loan default probability and risk bands for credit applications.",
-    version="1.0.0",
+    title="Credit Risk Prediction API",
+    description="Production ML pipeline for credit default prediction",
+    version="1.0.0"
 )
 
-_model_loaded = False
 
-try:
-    from src.model import load_artifacts
-
+@app.on_event("startup")
+async def startup_event():
+    """Load model artifacts on startup."""
     load_artifacts()
-    _model_loaded = True
-except Exception:
-    pass
 
 
-@app.get("/health", summary="Health check")
-def health():
-    """Returns API and model status.
-
-    Checks that the API is running and the model artifacts are loaded.
+@app.get("/health", response_model=dict)
+async def health_check():
     """
-    return {"status": "ok", "model_loaded": _model_loaded}
-
-
-@app.post("/predict", summary="Predict credit risk")
-def predict(input_data: PredictionInput):
-    """Predict credit risk for a loan application.
-
-    Accepts JSON with applicant features and returns:
-    - **approved**: bool — whether the application is approved
-    - **default_probability**: float — predicted probability of default
-    - **risk_band**: str — 'low', 'medium', or 'high'
-
-    Risk bands:
-    - low: probability < 0.15
-    - medium: 0.15 <= probability <= 0.35
-    - high: probability > 0.35
+    Health check endpoint.
+    
+    Returns the current health status of the API and whether
+    the model artifacts are loaded.
     """
-    try:
-        result = predict_default(input_data)
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    return {
+        "status": "ok",
+        "model_loaded": is_model_loaded()
+    }
+
+
+@app.post("/predict", response_model=PredictionResult)
+async def predict(application: CreditApplication):
+    """
+    Make a credit risk prediction.
+    
+    Accepts applicant features and returns:
+    - approved: whether the application is approved
+    - default_probability: predicted probability of default
+    - risk_band: low (<0.15), medium (0.15-0.35), or high (>0.35)
+    """
+    from src.predict import predict_default
+    return predict_default(application)

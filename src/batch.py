@@ -1,55 +1,40 @@
+#!/usr/bin/env python3
+"""Batch prediction script using the API."""
 import argparse
 import httpx
-import json
+import pandas as pd
 
 
-def run_batch(url: str, inputs: list[dict]):
-    """Send batch prediction requests to the API and print results."""
-    for i, data in enumerate(inputs):
-        try:
-            response = httpx.post(f"{url}/predict", json=data, timeout=30.0)
+def main():
+    parser = argparse.ArgumentParser(description="Batch prediction via API")
+    parser.add_argument("--input", required=True, help="Input CSV file")
+    parser.add_argument("--output", required=True, help="Output CSV file")
+    parser.add_argument("--url", default="http://localhost:8000", help="API base URL")
+    args = parser.parse_args()
+    
+    df = pd.read_csv(args.input)
+    results = []
+    
+    with httpx.Client(base_url=args.url, timeout=30.0) as client:
+        for _, row in df.iterrows():
+            payload = {
+                "income": float(row["income"]),
+                "credit_score": int(row["credit_score"]),
+                "employment_years": float(row["employment_years"]),
+                "debt_to_income": float(row["debt_to_income"]),
+                "loan_history_count": int(row["loan_history_count"]),
+                "age": int(row["age"]),
+                "home_ownership": row["home_ownership"],
+                "verified_income": int(row["verified_income"])
+            }
+            response = client.post("/predict", json=payload)
             response.raise_for_status()
-            result = response.json()
-            print(f"[{i+1}] Input: {data}")
-            print(f"     Result: {result}\n")
-        except Exception as e:
-            print(f"[{i+1}] Failed for {data}: {e}\n")
+            results.append(response.json())
+    
+    output_df = pd.DataFrame(results)
+    output_df.to_csv(args.output, index=False)
+    print(f"Wrote {len(results)} predictions to {args.output}")
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Batch prediction via API")
-    parser.add_argument(
-        "--url", default="http://localhost:8000", help="API base URL"
-    )
-    parser.add_argument(
-        "--file", type=argparse.FileType("r"), help="JSON file with input array"
-    )
-    args = parser.parse_args()
-
-    if args.file:
-        inputs = json.load(args.file)
-    else:
-        inputs = [
-            {
-                "income": 65000,
-                "credit_score": 720,
-                "employment_years": 5,
-                "debt_to_income": 0.28,
-                "loan_history_count": 2,
-                "age": 34,
-                "home_ownership": "rent",
-                "verified_income": 1,
-            },
-            {
-                "income": 30000,
-                "credit_score": 580,
-                "employment_years": 1,
-                "debt_to_income": 0.45,
-                "loan_history_count": 5,
-                "age": 22,
-                "home_ownership": "rent",
-                "verified_income": 0,
-            },
-        ]
-
-    run_batch(args.url, inputs)
+    main()

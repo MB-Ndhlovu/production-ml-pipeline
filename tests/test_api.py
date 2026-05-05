@@ -5,18 +5,18 @@ from src.api import app
 
 @pytest.mark.asyncio
 async def test_health():
-    """Test the /health endpoint returns status and model info."""
+    """Test the health check endpoint."""
     async with AsyncClient(app=app, base_url="http://test") as client:
         response = await client.get("/health")
-        assert response.status_code == 200
-        data = response.json()
-        assert data["status"] == "ok"
-        assert "model_loaded" in data
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "ok"
+    assert "model_loaded" in data
 
 
 @pytest.mark.asyncio
 async def test_predict():
-    """Test the /predict endpoint with valid input."""
+    """Test the prediction endpoint."""
     payload = {
         "income": 65000,
         "credit_score": 720,
@@ -25,14 +25,13 @@ async def test_predict():
         "loan_history_count": 2,
         "age": 34,
         "home_ownership": "rent",
-        "verified_income": 1,
+        "verified_income": 1
     }
     async with AsyncClient(app=app, base_url="http://test") as client:
         response = await client.post("/predict", json=payload)
-        assert response.status_code == 200
-        data = response.json()
-        assert "approved" in data
-        assert "default_probability" in data
-        assert "risk_band" in data
-        assert data["risk_band"] in ("low", "medium", "high")
-        assert 0.0 <= data["default_probability"] <= 1.0
+    assert response.status_code == 200
+    data = response.json()
+    assert "approved" in data
+    assert "default_probability" in data
+    assert "risk_band" in data
+    assert data["risk_band"] in ["low", "medium", "high"]

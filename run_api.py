@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+"""Run the API server locally."""
 import uvicorn
 
 if __name__ == "__main__":
