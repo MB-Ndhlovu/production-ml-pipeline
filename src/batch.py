@@ -1,40 +1,49 @@
-#!/usr/bin/env python3
-"""Batch prediction script using the API."""
 import argparse
+import json
 import httpx
-import pandas as pd
+from typing import List
 
+DEFAULT_API_URL = "http://localhost:8000/predict"
 
-def main():
-    parser = argparse.ArgumentParser(description="Batch prediction via API")
-    parser.add_argument("--input", required=True, help="Input CSV file")
-    parser.add_argument("--output", required=True, help="Output CSV file")
-    parser.add_argument("--url", default="http://localhost:8000", help="API base URL")
-    args = parser.parse_args()
+def batch_predict(data: List[dict], api_url: str = DEFAULT_API_URL) -> List[dict]:
+    """
+    Send batch prediction requests to the API.
     
-    df = pd.read_csv(args.input)
+    Args:
+        data: List of prediction input dictionaries
+        api_url: URL of the prediction API
+        
+    Returns:
+        List of prediction results
+    """
     results = []
     
-    with httpx.Client(base_url=args.url, timeout=30.0) as client:
-        for _, row in df.iterrows():
-            payload = {
-                "income": float(row["income"]),
-                "credit_score": int(row["credit_score"]),
-                "employment_years": float(row["employment_years"]),
-                "debt_to_income": float(row["debt_to_income"]),
-                "loan_history_count": int(row["loan_history_count"]),
-                "age": int(row["age"]),
-                "home_ownership": row["home_ownership"],
-                "verified_income": int(row["verified_income"])
-            }
-            response = client.post("/predict", json=payload)
+    with httpx.Client(timeout=30.0) as client:
+        for item in data:
+            response = client.post(api_url, json=item)
             response.raise_for_status()
             results.append(response.json())
     
-    output_df = pd.DataFrame(results)
-    output_df.to_csv(args.output, index=False)
-    print(f"Wrote {len(results)} predictions to {args.output}")
+    return results
 
+def main():
+    parser = argparse.ArgumentParser(description="Batch prediction using the credit scoring API")
+    parser.add_argument("input_file", help="JSON file containing prediction requests")
+    parser.add_argument("--output", "-o", help="Output file for results (default: stdout)")
+    parser.add_argument("--url", "-u", default=DEFAULT_API_URL, help="API URL")
+    
+    args = parser.parse_args()
+    
+    with open(args.input_file, "r") as f:
+        data = json.load(f)
+    
+    results = batch_predict(data, args.url)
+    
+    if args.output:
+        with open(args.output, "w") as f:
+            json.dump(results, f, indent=2)
+    else:
+        print(json.dumps(results, indent=2))
 
 if __name__ == "__main__":
     main()

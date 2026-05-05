@@ -4,17 +4,33 @@ A production-ready credit scoring prediction API built with FastAPI.
 
 ## Overview
 
-This project provides a REST API for credit default prediction, featuring:
-- Real-time credit risk assessment
-- Probability-based risk banding (low/medium/high)
-- Batch prediction support
-- Health check endpoint for monitoring
+This project provides a REST API for credit default prediction, enabling real-time scoring of credit applications.
 
-## API Documentation
+## Tech Stack
 
-### Endpoints
+- **FastAPI** - Web framework
+- **scikit-learn** - ML model
+- **joblib** - Model serialization
+- **pydantic** - Data validation
 
-#### `GET /health`
+## Installation
+
+```bash
+pip install -r requirements.txt
+```
+
+## Running the API
+
+```bash
+python run_api.py
+```
+
+The server starts at `http://localhost:8000`.
+
+## API Endpoints
+
+### GET /health
+
 Health check endpoint.
 
 **Response:**
@@ -25,10 +41,11 @@ Health check endpoint.
 }
 ```
 
-#### `POST /predict`
-Make a credit risk prediction.
+### POST /predict
 
-**Request Body:**
+Predict credit default probability.
+
+**Request body:**
 ```json
 {
   "income": 65000,
@@ -51,40 +68,46 @@ Make a credit risk prediction.
 }
 ```
 
-**Risk Bands:**
-- `low`: probability < 0.15
-- `medium`: 0.15 ≤ probability ≤ 0.35
-- `high`: probability > 0.35
+### Risk Bands
 
-## Installation
+| Band | Probability Range |
+|------|-------------------|
+| low | < 0.15 |
+| medium | 0.15 - 0.35 |
+| high | > 0.35 |
 
-```bash
-pip install -r requirements.txt
-```
+### Approval Threshold
 
-## Running the API
+Applications with `default_probability < 0.35` are approved.
 
-```bash
-python run_api.py
-```
-
-The API will be available at `http://localhost:8000`. API documentation at `http://localhost:8000/docs`.
-
-## Testing
+## Running Tests
 
 ```bash
 pytest tests/
 ```
 
-## Batch Prediction
-
-```bash
-python src/batch.py --input data.csv --output predictions.csv
-```
-
 ## Deployment
 
-For production deployment, use:
+For production deployment, use uvicorn with workers:
+
 ```bash
 uvicorn src.api:app --host 0.0.0.0 --port 8000 --workers 4
+```
+
+## Project Structure
+
+```
+production-ml-pipeline/
+├── README.md
+├── requirements.txt
+├── run_api.py
+├── models/           # ML model artifacts
+├── src/
+│   ├── __init__.py
+│   ├── model.py      # Model loading utilities
+│   ├── predict.py    # Prediction logic
+│   └── api.py        # FastAPI application
+└── tests/
+    ├── __init__.py
+    └── test_api.py
 ```
