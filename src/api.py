@@ -1,67 +1,61 @@
-from contextlib import asynccontextmanager
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+"""FastAPI application for credit default prediction."""
 
-from src.model import load_artifacts, is_model_loaded
-from src.predict import PredictionInput, PredictionOutput, predict
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import JSONResponse
 
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Load model artifacts on startup."""
-    try:
-        load_artifacts()
-    except Exception:
-        pass
-    yield
+from .model import load_artifacts, is_model_loaded
+from .predict import PredictionInput, PredictionOutput, predict_default
 
 
 app = FastAPI(
-    title="Credit Scoring API",
-    description="Production ML pipeline for credit default prediction.",
-    version="1.0.0",
-    lifespan=lifespan,
+    title="Credit Default Prediction API",
+    description="API for predicting credit default probability and risk classification",
+    version="1.0.0"
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+_model_loaded = False
 
 
-@app.get(
-    "/health",
-    response_model=dict,
-    summary="Health check",
-    description="Returns API status and whether model artifacts are loaded.",
-)
-def health():
+@app.on_event("startup")
+async def startup_event():
+    """Load ML artifacts on startup."""
+    global _model_loaded
+    try:
+        load_artifacts()
+        _model_loaded = is_model_loaded()
+    except Exception as e:
+        _model_loaded = False
+        print(f"Failed to load model: {e}")
+
+
+@app.get("/health", response_model=dict, tags=["Health"])
+async def health_check():
     """
     Health check endpoint.
 
-    Returns:
-        dict with status and model_loaded flag.
+    Returns the current status of the API and whether the model is loaded.
     """
-    return {"status": "ok", "model_loaded": is_model_loaded()}
+    return JSONResponse(
+        content={
+            "status": "ok",
+            "model_loaded": _model_loaded
+        }
+    )
 
 
-@app.post(
-    "/predict",
-    response_model=PredictionOutput,
-    summary="Predict credit default",
-    description="Submit applicant features and receive a default probability, approval decision, and risk band.",
-)
-def predict_endpoint(input_data: PredictionInput):
+@app.post("/predict", response_model=PredictionOutput, tags=["Prediction"])
+async def predict(input_data: PredictionInput):
     """
-    Prediction endpoint.
+    Predict credit default probability.
 
-    Args:
-        input_data: Validated applicant features.
-
-    Returns:
-        PredictionOutput with approval, probability, and risk band.
+    Accepts feature values and returns approval decision, default probability,
+    and risk band classification.
     """
-    return predict(input_data)
+    if not _model_loaded:
+        raise HTTPException(status_code=503, detail="Model not loaded")
+
+    try:
+        result = predict_default(input_data)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

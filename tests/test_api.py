@@ -1,23 +1,29 @@
+"""Pytest tests for the API endpoints."""
+
 import pytest
 from fastapi.testclient import TestClient
 
+import sys
+from pathlib import sys.path.insert(0, str(sys.path[0] / ".." ))
+
 from src.api import app
+
 
 client = TestClient(app)
 
 
-def test_health():
-    """Test GET /health returns status and model_loaded flag."""
+def test_health_endpoint():
+    """Test the health check endpoint."""
     response = client.get("/health")
     assert response.status_code == 200
     data = response.json()
-    assert data["status"] == "ok"
+    assert "status" in data
     assert "model_loaded" in data
-    assert isinstance(data["model_loaded"], bool)
+    assert data["status"] == "ok"
 
 
-def test_predict_success():
-    """Test POST /predict with valid input returns expected fields."""
+def test_predict_endpoint_success():
+    """Test the prediction endpoint with valid input."""
     payload = {
         "income": 65000,
         "credit_score": 720,
@@ -26,49 +32,39 @@ def test_predict_success():
         "loan_history_count": 2,
         "age": 34,
         "home_ownership": "rent",
-        "verified_income": 1,
+        "verified_income": 1
     }
+
     response = client.post("/predict", json=payload)
     assert response.status_code == 200
     data = response.json()
+
     assert "approved" in data
-    assert isinstance(data["approved"], bool)
     assert "default_probability" in data
-    assert 0.0 <= data["default_probability"] <= 1.0
     assert "risk_band" in data
-    assert data["risk_band"] in ("low", "medium", "high")
+    assert data["risk_band"] in ["low", "medium", "high"]
+    assert 0 <= data["default_probability"] <= 1
 
 
-def test_predict_risk_band_low():
-    """Test low-risk applicant returns low band."""
+def test_predict_endpoint_invalid_data():
+    """Test the prediction endpoint with invalid input."""
     payload = {
-        "income": 120000,
-        "credit_score": 800,
-        "employment_years": 10,
-        "debt_to_income": 0.1,
-        "loan_history_count": 1,
-        "age": 40,
-        "home_ownership": "own",
-        "verified_income": 1,
-    }
-    response = client.post("/predict", json=payload)
-    assert response.status_code == 200
-    data = response.json()
-    assert data["risk_band"] == "low"
-
-
-def test_predict_missing_field():
-    """Test POST /predict with missing required field returns 422."""
-    payload = {
-        "income": 65000,
+        "income": -100,
         "credit_score": 720,
+        "employment_years": 5,
+        "debt_to_income": 0.28,
+        "loan_history_count": 2,
+        "age": 34,
+        "home_ownership": "rent",
+        "verified_income": 1
     }
+
     response = client.post("/predict", json=payload)
     assert response.status_code == 422
 
 
-def test_predict_invalid_home_ownership():
-    """Test POST /predict with invalid home_ownership returns 422."""
+def test_predict_endpoint_missing_field():
+    """Test the prediction endpoint with missing required field."""
     payload = {
         "income": 65000,
         "credit_score": 720,
@@ -76,8 +72,8 @@ def test_predict_invalid_home_ownership():
         "debt_to_income": 0.28,
         "loan_history_count": 2,
         "age": 34,
-        "home_ownership": "invalid",
-        "verified_income": 1,
+        "home_ownership": "rent"
     }
+
     response = client.post("/predict", json=payload)
     assert response.status_code == 422

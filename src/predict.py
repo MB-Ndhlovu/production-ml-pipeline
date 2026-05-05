@@ -1,39 +1,35 @@
-from typing import Literal
-import pandas as pd
-import numpy as np
+"""Prediction schemas and functions."""
+
+from typing import Literal, Optional
 from pydantic import BaseModel, Field
 
-from src.model import get_model, get_scaler, get_feature_names
+from .model import get_model, get_scaler, get_feature_names
 
 
 class PredictionInput(BaseModel):
     """Input schema for credit default prediction."""
 
-    income: float = Field(..., description="Annual income")
-    credit_score: int = Field(..., description="Credit score (300-850)")
-    employment_years: float = Field(..., description="Years employed")
-    debt_to_income: float = Field(..., description="Debt-to-income ratio (0-1)")
-    loan_history_count: int = Field(..., description="Number of past loans")
-    age: int = Field(..., description="Applicant age")
-    home_ownership: Literal["rent", "own", "mortgage", "other"] = Field(
-        ..., description="Home ownership status"
-    )
-    verified_income: int = Field(..., description="Income verified (0 or 1)")
+    income: float = Field(..., gt=0, description="Annual income in currency units")
+    credit_score: int = Field(..., ge=300, le=850, description="Credit score (300-850)")
+    employment_years: int = Field(..., ge=0, description="Years of employment")
+    debt_to_income: float = Field(..., ge=0, le=1, description="Debt-to-income ratio (0-1)")
+    loan_history_count: int = Field(..., ge=0, description="Number of previous loans")
+    age: int = Field(..., ge=18, le=120, description="Age in years")
+    home_ownership: Literal["rent", "own", "mortgage"] = Field(..., description="Home ownership status")
+    verified_income: int = Field(..., ge=0, le=1, description="Income verification status (0 or 1)")
 
     model_config = {
         "json_schema_extra": {
-            "examples": [
-                {
-                    "income": 65000,
-                    "credit_score": 720,
-                    "employment_years": 5,
-                    "debt_to_income": 0.28,
-                    "loan_history_count": 2,
-                    "age": 34,
-                    "home_ownership": "rent",
-                    "verified_income": 1,
-                }
-            ]
+            "example": {
+                "income": 65000,
+                "credit_score": 720,
+                "employment_years": 5,
+                "debt_to_income": 0.28,
+                "loan_history_count": 2,
+                "age": 34,
+                "home_ownership": "rent",
+                "verified_income": 1
+            }
         }
     }
 
@@ -42,77 +38,84 @@ class PredictionOutput(BaseModel):
     """Output schema for credit default prediction."""
 
     approved: bool = Field(..., description="Whether the loan is approved")
-    default_probability: float = Field(
-        ..., description="Probability of default (0-1)"
-    )
-    risk_band: Literal["low", "medium", "high"] = Field(
-        ..., description="Risk band based on probability"
-    )
+    default_probability: float = Field(..., ge=0, le=1, description="Predicted probability of default")
+    risk_band: Literal["low", "medium", "high"] = Field(..., description="Risk classification band")
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "approved": True,
+                "default_probability": 0.12,
+                "risk_band": "low"
+            }
+        }
+    }
 
 
-def _get_risk_band(probability: float) -> Literal["low", "medium", "high"]:
-    """Determine risk band from default probability."""
+def get_risk_band(probability: float) -> Literal["low", "medium", "high"]:
+    """Determine risk band from probability."""
     if probability < 0.15:
         return "low"
     elif probability <= 0.35:
         return "medium"
-    return "high"
+    else:
+        return "high"
 
 
-def _build_features(input_data: PredictionInput) -> pd.DataFrame:
-    """Build feature DataFrame matching the trained model's expected schema."""
+def predict_default(input_data: PredictionInput) -> PredictionOutput:
+    """
+    Predict credit default probability.
+
+    Args:
+        input_data: Validated prediction input
+
+    Returns:
+        Prediction output with approval decision, probability, and risk band
+    """
+    model = get_model()
     scaler = get_scaler()
-    feature_names_list = get_feature_names()
+    feature_names = get_feature_names()
 
-    home = input_data.home_ownership.upper()
-    raw = {
-        "annual_income": input_data.income,
+    import pandas as pd
+
+    # Build feature vector matching the exact feature names the model was trained on
+    features = {
         "credit_score": input_data.credit_score,
-        "employment_years": input_data.employment_years,
+        "annual_income": input_data.income,
         "debt_to_income": input_data.debt_to_income,
-        "num_credit_lines": input_data.loan_history_count,
+        "employment_years": input_data.employment_years,
+        "loan_amount": 10000,
+        "interest_rate": 0.15,
         "verified_income": input_data.verified_income,
-        "age": input_data.age,
-        "loan_amount": 0,
-        "interest_rate": 0,
+        "num_credit_lines": input_data.loan_history_count,
         "delinquency_2yrs": 0,
         "loan_purpose_business": 0,
         "loan_purpose_debt_consolidation": 0,
         "loan_purpose_home_improvement": 0,
         "loan_purpose_major_purchase": 0,
-        "loan_purpose_other": 0,
-        "home_ownership_MORTGAGE": 1 if home == "MORTGAGE" else 0,
-        "home_ownership_OTHER": 1 if home == "OTHER" else 0,
-        "home_ownership_OWN": 1 if home == "OWN" else 0,
-        "home_ownership_RENT": 1 if home == "RENT" else 0,
+        "loan_purpose_other": 1,
+        "home_ownership_MORTGAGE": 0,
+        "home_ownership_OTHER": 0,
+        "home_ownership_OWN": 0,
+        "home_ownership_RENT": 0
     }
 
-    df = pd.DataFrame([raw], dtype=np.float64)[feature_names_list]
+    home_ownership_map = {
+        "rent": "home_ownership_RENT",
+        "own": "home_ownership_OWN",
+        "mortgage": "home_ownership_MORTGAGE"
+    }
+    features[home_ownership_map.get(input_data.home_ownership, "home_ownership_RENT")] = 1
 
-    if scaler and hasattr(scaler, "transform"):
-        df[:] = scaler.transform(df)
+    df = pd.DataFrame([features], columns=feature_names)
 
-    return df
+    scaled = scaler.transform(df)
+    probability = model.predict_proba(scaled)[0][1]
 
-
-def predict(input_data: PredictionInput) -> PredictionOutput:
-    """
-    Make a credit default prediction.
-
-    Args:
-        input_data: Validated prediction input.
-
-    Returns:
-        PredictionOutput with approval decision, probability, and risk band.
-    """
-    features = _build_features(input_data)
-    model = get_model()
-    default_prob = float(model.predict_proba(features)[0][1])
-    approved = default_prob < 0.35
-    risk_band = _get_risk_band(default_prob)
+    approved = probability <= 0.35
 
     return PredictionOutput(
         approved=approved,
-        default_probability=round(default_prob, 4),
-        risk_band=risk_band,
+        default_probability=round(float(probability), 4),
+        risk_band=get_risk_band(probability)
     )

@@ -1,14 +1,15 @@
 # Production ML Pipeline with FastAPI
 
-Credit scoring prediction API powered by a trained scikit-learn model.
+Credit scoring prediction API using a trained scikit-learn model.
 
 ## Overview
 
-This project provides a REST API for credit default prediction. It loads pre-trained model artifacts and exposes endpoints for single and batch predictions.
+This project provides a FastAPI-based REST API for credit default prediction. It loads a pre-trained model and scaler from the `credit-scoring-pipeline` repository and exposes endpoints for single and batch predictions.
 
 ## API Endpoints
 
 ### `GET /health`
+
 Health check endpoint.
 
 **Response:**
@@ -20,7 +21,8 @@ Health check endpoint.
 ```
 
 ### `POST /predict`
-Make a credit default prediction.
+
+Predict credit default probability.
 
 **Request Body:**
 ```json
@@ -47,19 +49,24 @@ Make a credit default prediction.
 
 **Risk Bands:**
 - `low`: probability < 0.15
-- `medium`: probability 0.15 – 0.35
+- `medium`: probability 0.15 - 0.35
 - `high`: probability > 0.35
 
-## Local Development
+## Setup
 
 ```bash
 pip install -r requirements.txt
+```
+
+## Run Locally
+
+```bash
 python run_api.py
 ```
 
-API available at `http://localhost:8000`. Docs at `http://localhost:8000/docs`.
+API available at: http://localhost:8000
 
-## Testing
+## Run Tests
 
 ```bash
 pytest tests/ -v
@@ -67,16 +74,8 @@ pytest tests/ -v
 
 ## Deployment
 
-The API can be containerized or deployed to any Python-capable hosting platform:
-
-```bash
-pip install -r requirements.txt
-uvicorn src.api:app --host 0.0.0.0 --port 8000
-```
-
-## Model Artifacts
-
-Model files are loaded from the `models/` directory:
-- `credit_model.pkl` – trained classifier
-- `scaler.pkl` – feature scaler
-- `feature_names.pkl` – expected feature names and categorical mappings
+The API can be deployed to any platform that supports Python:
+- Railway
+- Render
+- Fly.io
+- Docker
