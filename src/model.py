@@ -1,52 +1,43 @@
-"""Model loading and inference utilities."""
+"""Model loading and artifact management."""
+
 import joblib
 from pathlib import Path
 from typing import Optional
 
 MODEL_DIR = Path(__file__).parent.parent / "models"
 
-_model = None
-_scaler = None
-_feature_names = None
+_model: Optional[object] = None
+_scaler: Optional[object] = None
+_feature_names: Optional[list] = None
 
 
-def load_artifacts() -> bool:
-    """Load model, scaler, and feature names from disk."""
+def load_artifacts() -> tuple:
+    """Load all model artifacts from disk."""
     global _model, _scaler, _feature_names
-    try:
+
+    if _model is None:
         _model = joblib.load(MODEL_DIR / "credit_model.pkl")
+    if _scaler is None:
         _scaler = joblib.load(MODEL_DIR / "scaler.pkl")
+    if _feature_names is None:
         _feature_names = joblib.load(MODEL_DIR / "feature_names.pkl")
-        return True
-    except Exception:
-        return False
+
+    return _model, _scaler, _feature_names
 
 
-def is_model_loaded() -> bool:
-    """Check if model artifacts are loaded."""
-    return _model is not None and _scaler is not None and _feature_names is not None
+def get_model():
+    """Get the loaded model."""
+    model, _, _ = load_artifacts()
+    return model
 
 
-def predict_proba(features: dict) -> float:
-    """Predict default probability from raw features."""
-    import pandas as pd
+def get_scaler():
+    """Get the loaded scaler."""
+    _, scaler, _ = load_artifacts()
+    return scaler
 
-    if not is_model_loaded():
-        raise RuntimeError("Model artifacts not loaded")
 
-    # Build DataFrame in correct feature order
-    df = pd.DataFrame([features])
-
-    # One-hot encode home_ownership
-    home_ownership = features.get("home_ownership", "rent")
-    for col in _feature_names:
-        if col.startswith("home_ownership_"):
-            df[col] = 1 if col == f"home_ownership_{home_ownership}" else 0
-
-    # Ensure correct column order
-    df = df.reindex(columns=_feature_names, fill_value=0)
-
-    # Scale and predict
-    X = _scaler.transform(df)
-    prob = _model.predict_proba(X)[0][1]
-    return float(prob)
+def get_feature_names():
+    """Get the feature names list."""
+    _, _, feature_names = load_artifacts()
+    return feature_names

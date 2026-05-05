@@ -1,40 +1,47 @@
 """Batch prediction script using the API."""
+
 import argparse
 import json
-import httpx
-from typing import List
+import requests
+from pathlib import Path
 
 
-def batch_predict(url: str, payloads: List[dict]) -> List[dict]:
-    """Send batch prediction requests to the API."""
+def run_batch_predictions(url: str, input_file: str, output_file: str = None):
+    """
+    Run batch predictions via the API.
+
+    Args:
+        url: Base URL of the API (e.g., http://localhost:8000)
+        input_file: Path to JSON file with list of predictions
+        output_file: Optional path to save results
+    """
+    with open(input_file, "r") as f:
+        data = json.load(f)
+
     results = []
-    with httpx.Client(timeout=30.0) as client:
-        for payload in payloads:
-            response = client.post(f"{url}/predict", json=payload)
-            response.raise_for_status()
+    for item in data:
+        response = requests.post(f"{url}/predict", json=item)
+        if response.status_code == 200:
             results.append(response.json())
+        else:
+            results.append({"error": f"Status {response.status_code}: {response.text}"})
+
+    if output_file:
+        with open(output_file, "w") as f:
+            json.dump(results, f, indent=2)
+        print(f"Results saved to {output_file}")
+    else:
+        for r in results:
+            print(json.dumps(r, indent=2))
+
     return results
 
 
-def main():
+if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Batch prediction via API")
     parser.add_argument("--url", default="http://localhost:8000", help="API base URL")
-    parser.add_argument("--input", required=True, help="JSON file with array of inputs")
-    parser.add_argument("--output", help="Output JSON file (default: stdout)")
+    parser.add_argument("--input", required=True, help="Input JSON file")
+    parser.add_argument("--output", help="Output JSON file (optional)")
+
     args = parser.parse_args()
-
-    with open(args.input) as f:
-        payloads = json.load(f)
-
-    results = batch_predict(args.url, payloads)
-
-    if args.output:
-        with open(args.output, "w") as f:
-            json.dump(results, f, indent=2)
-        print(f"Wrote {len(results)} results to {args.output}")
-    else:
-        print(json.dumps(results, indent=2))
-
-
-if __name__ == "__main__":
-    main()
+    run_batch_predictions(args.url, args.input, args.output)
