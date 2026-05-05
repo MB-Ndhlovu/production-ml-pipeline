@@ -1,36 +1,14 @@
 # Production ML Pipeline with FastAPI
 
-A production-ready credit scoring prediction API built with FastAPI.
+Credit scoring prediction API powered by a trained scikit-learn model.
 
 ## Overview
 
-This project provides a REST API for credit default prediction, enabling real-time scoring of credit applications.
-
-## Tech Stack
-
-- **FastAPI** - Web framework
-- **scikit-learn** - ML model
-- **joblib** - Model serialization
-- **pydantic** - Data validation
-
-## Installation
-
-```bash
-pip install -r requirements.txt
-```
-
-## Running the API
-
-```bash
-python run_api.py
-```
-
-The server starts at `http://localhost:8000`.
+This project provides a REST API for credit default prediction. It loads pre-trained model artifacts and exposes endpoints for single and batch predictions.
 
 ## API Endpoints
 
-### GET /health
-
+### `GET /health`
 Health check endpoint.
 
 **Response:**
@@ -41,11 +19,10 @@ Health check endpoint.
 }
 ```
 
-### POST /predict
+### `POST /predict`
+Make a credit default prediction.
 
-Predict credit default probability.
-
-**Request body:**
+**Request Body:**
 ```json
 {
   "income": 65000,
@@ -68,46 +45,38 @@ Predict credit default probability.
 }
 ```
 
-### Risk Bands
+**Risk Bands:**
+- `low`: probability < 0.15
+- `medium`: probability 0.15 – 0.35
+- `high`: probability > 0.35
 
-| Band | Probability Range |
-|------|-------------------|
-| low | < 0.15 |
-| medium | 0.15 - 0.35 |
-| high | > 0.35 |
-
-### Approval Threshold
-
-Applications with `default_probability < 0.35` are approved.
-
-## Running Tests
+## Local Development
 
 ```bash
-pytest tests/
+pip install -r requirements.txt
+python run_api.py
+```
+
+API available at `http://localhost:8000`. Docs at `http://localhost:8000/docs`.
+
+## Testing
+
+```bash
+pytest tests/ -v
 ```
 
 ## Deployment
 
-For production deployment, use uvicorn with workers:
+The API can be containerized or deployed to any Python-capable hosting platform:
 
 ```bash
-uvicorn src.api:app --host 0.0.0.0 --port 8000 --workers 4
+pip install -r requirements.txt
+uvicorn src.api:app --host 0.0.0.0 --port 8000
 ```
 
-## Project Structure
+## Model Artifacts
 
-```
-production-ml-pipeline/
-├── README.md
-├── requirements.txt
-├── run_api.py
-├── models/           # ML model artifacts
-├── src/
-│   ├── __init__.py
-│   ├── model.py      # Model loading utilities
-│   ├── predict.py    # Prediction logic
-│   └── api.py        # FastAPI application
-└── tests/
-    ├── __init__.py
-    └── test_api.py
-```
+Model files are loaded from the `models/` directory:
+- `credit_model.pkl` – trained classifier
+- `scaler.pkl` – feature scaler
+- `feature_names.pkl` – expected feature names and categorical mappings
