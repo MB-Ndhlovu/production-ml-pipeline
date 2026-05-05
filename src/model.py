@@ -1,43 +1,33 @@
-"""Model loading and artifact management."""
-
 import joblib
 from pathlib import Path
-from typing import Optional
 
 MODEL_DIR = Path(__file__).parent.parent / "models"
 
-_model: Optional[object] = None
-_scaler: Optional[object] = None
-_feature_names: Optional[list] = None
+_credit_model = None
+_scaler = None
+_feature_names = None
 
 
-def load_artifacts() -> tuple:
-    """Load all model artifacts from disk."""
-    global _model, _scaler, _feature_names
-
-    if _model is None:
-        _model = joblib.load(MODEL_DIR / "credit_model.pkl")
-    if _scaler is None:
+def load_artifacts():
+    """Load model artifacts from disk."""
+    global _credit_model, _scaler, _feature_names
+    if _credit_model is None:
+        _credit_model = joblib.load(MODEL_DIR / "credit_model.pkl")
         _scaler = joblib.load(MODEL_DIR / "scaler.pkl")
-    if _feature_names is None:
         _feature_names = joblib.load(MODEL_DIR / "feature_names.pkl")
-
-    return _model, _scaler, _feature_names
+    return _credit_model, _scaler, _feature_names
 
 
 def get_model():
-    """Get the loaded model."""
-    model, _, _ = load_artifacts()
-    return model
+    """Return the loaded credit model."""
+    return load_artifacts()[0]
 
 
 def get_scaler():
-    """Get the loaded scaler."""
-    _, scaler, _ = load_artifacts()
-    return scaler
+    """Return the loaded scaler."""
+    return load_artifacts()[1]
 
 
 def get_feature_names():
-    """Get the feature names list."""
-    _, _, feature_names = load_artifacts()
-    return feature_names
+    """Return the loaded feature names list."""
+    return load_artifacts()[2]

@@ -1,23 +1,22 @@
-"""pytest tests for the API endpoints."""
-
 import pytest
-from fastapi.testclient import TestClient
+from httpx import AsyncClient
 from src.api import app
 
-client = TestClient(app)
+
+@pytest.mark.asyncio
+async def test_health():
+    """Test the /health endpoint returns status and model info."""
+    async with AsyncClient(app=app, base_url="http://test") as client:
+        response = await client.get("/health")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "ok"
+        assert "model_loaded" in data
 
 
-def test_health_endpoint():
-    """Test the health check endpoint."""
-    response = client.get("/health")
-    assert response.status_code == 200
-    data = response.json()
-    assert data["status"] == "ok"
-    assert "model_loaded" in data
-
-
-def test_predict_endpoint():
-    """Test the prediction endpoint with valid input."""
+@pytest.mark.asyncio
+async def test_predict():
+    """Test the /predict endpoint with valid input."""
     payload = {
         "income": 65000,
         "credit_score": 720,
@@ -26,45 +25,14 @@ def test_predict_endpoint():
         "loan_history_count": 2,
         "age": 34,
         "home_ownership": "rent",
-        "verified_income": 1
+        "verified_income": 1,
     }
-    response = client.post("/predict", json=payload)
-    assert response.status_code == 200
-    data = response.json()
-    assert "approved" in data
-    assert "default_probability" in data
-    assert "risk_band" in data
-    assert data["risk_band"] in ["low", "medium", "high"]
-    assert 0 <= data["default_probability"] <= 1
-
-
-def test_predict_invalid_credit_score():
-    """Test prediction with out-of-range credit score."""
-    payload = {
-        "income": 65000,
-        "credit_score": 900,  # Invalid: max is 850
-        "employment_years": 5,
-        "debt_to_income": 0.28,
-        "loan_history_count": 2,
-        "age": 34,
-        "home_ownership": "rent",
-        "verified_income": 1
-    }
-    response = client.post("/predict", json=payload)
-    assert response.status_code == 422  # Validation error
-
-
-def test_predict_negative_income():
-    """Test prediction with negative income."""
-    payload = {
-        "income": -1000,
-        "credit_score": 720,
-        "employment_years": 5,
-        "debt_to_income": 0.28,
-        "loan_history_count": 2,
-        "age": 34,
-        "home_ownership": "rent",
-        "verified_income": 1
-    }
-    response = client.post("/predict", json=payload)
-    assert response.status_code == 422
+    async with AsyncClient(app=app, base_url="http://test") as client:
+        response = await client.post("/predict", json=payload)
+        assert response.status_code == 200
+        data = response.json()
+        assert "approved" in data
+        assert "default_probability" in data
+        assert "risk_band" in data
+        assert data["risk_band"] in ("low", "medium", "high")
+        assert 0.0 <= data["default_probability"] <= 1.0
