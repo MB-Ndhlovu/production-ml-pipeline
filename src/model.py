@@ -1,8 +1,5 @@
-"""Model loading utilities for credit scoring pipeline."""
-
 import joblib
 from pathlib import Path
-from typing import Optional
 
 MODEL_DIR = Path(__file__).parent.parent / "models"
 
@@ -12,7 +9,7 @@ _feature_names = None
 
 
 def load_artifacts():
-    """Load all model artifacts from disk."""
+    """Load model artifacts from the models directory."""
     global _model, _scaler, _feature_names
 
     if _model is None:
@@ -26,27 +23,21 @@ def load_artifacts():
 
 
 def get_model():
-    """Get the loaded model artifact."""
-    model, _, _ = load_artifacts()
-    return model
+    """Get the loaded model, loading if necessary."""
+    if _model is None:
+        load_artifacts()
+    return _model
 
 
 def get_scaler():
-    """Get the loaded scaler artifact."""
-    _, scaler, _ = load_artifacts()
-    return scaler
+    """Get the loaded scaler, loading if necessary."""
+    if _scaler is None:
+        load_artifacts()
+    return _scaler
 
 
 def get_feature_names():
-    """Get the loaded feature names."""
-    _, _, feature_names = load_artifacts()
-    return feature_names
-
-
-def is_model_loaded() -> bool:
-    """Check if all model artifacts are loaded."""
-    try:
+    """Get the feature names, loading if necessary."""
+    if _feature_names is None:
         load_artifacts()
-        return True
-    except Exception:
-        return False
+    return _feature_names

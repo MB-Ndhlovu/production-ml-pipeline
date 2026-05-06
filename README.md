@@ -1,19 +1,19 @@
 # Production ML Pipeline with FastAPI
 
-A production-ready credit scoring API built with FastAPI, featuring real-time predictions, health checks, and batch processing capabilities.
+A production-ready credit scoring prediction API built with FastAPI.
 
 ## Features
 
-- **Real-time Predictions**: POST endpoint for instant credit default probability predictions
-- **Health Monitoring**: GET endpoint to verify service and model status
-- **Risk Banding**: Classifies applications as low, medium, or high risk
-- **Batch Processing**: Script for processing multiple predictions via the API
-- **Model Artifacts**: Pre-trained credit scoring model with standardScaler
+- REST API for real-time credit default predictions
+- Probability scores and risk band classification
+- Health check endpoint for monitoring
+- Batch prediction support
+- OpenAPI documentation
 
 ## API Endpoints
 
-### GET /health
-Returns service health status and model loading state.
+### `GET /health`
+Health check endpoint.
 
 **Response:**
 ```json
@@ -23,8 +23,8 @@ Returns service health status and model loading state.
 }
 ```
 
-### POST /predict
-Submit credit application features for prediction.
+### `POST /predict`
+Predict credit default probability.
 
 **Request Body:**
 ```json
@@ -49,10 +49,13 @@ Submit credit application features for prediction.
 }
 ```
 
-### Risk Band Thresholds
-- **Low**: probability < 0.15
-- **Medium**: 0.15 <= probability <= 0.35
-- **High**: probability > 0.35
+### Risk Bands
+- `low`: probability < 0.15
+- `medium`: probability 0.15 - 0.35
+- `high`: probability > 0.35
+
+### Approval Threshold
+Applications with `default_probability < 0.35` are approved.
 
 ## Installation
 
@@ -62,49 +65,41 @@ pip install -r requirements.txt
 
 ## Running the API
 
-### Local Development
 ```bash
 python run_api.py
 ```
 
-The API will be available at `http://localhost:8000`. Interactive docs at `http://localhost:8000/docs`.
+The API will be available at `http://localhost:8000`
 
-### Production
-```bash
-uvicorn src.api:app --host 0.0.0.0 --port 8000
-```
+## API Documentation
 
-## Batch Predictions
-
-Process multiple predictions via the API:
-```bash
-python src/batch.py --url http://localhost:8000 --input data.csv --output results.json
-```
+Once running, visit:
+- Swagger UI: `http://localhost:8000/docs`
+- ReDoc: `http://localhost:8000/redoc`
 
 ## Running Tests
 
 ```bash
-pytest tests/ -v
+pytest tests/
 ```
 
-## Project Structure
+## Batch Prediction
 
+```bash
+python src/batch.py --url http://localhost:8000 --input data.csv --output predictions.csv
 ```
-production-ml-pipeline/
-├── README.md
-├── requirements.txt
-├── models/
-│   ├── credit_model.pkl
-│   ├── scaler.pkl
-│   └── feature_names.pkl
-├── src/
-│   ├── __init__.py
-│   ├── model.py
-│   ├── predict.py
-│   ├── api.py
-│   └── batch.py
-├── tests/
-│   ├── __init__.py
-│   └── test_api.py
-└── run_api.py
+
+## Deployment
+
+The API can be deployed using uvicorn:
+
+```bash
+uvicorn src.api:app --host 0.0.0.0 --port 8000
 ```
+
+## Model Artifacts
+
+Model artifacts are loaded from the `models/` directory:
+- `credit_model.pkl` - Trained classifier
+- `scaler.pkl` - Feature scaler
+- `feature_names.pkl` - Ordered feature names
