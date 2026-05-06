@@ -1,9 +1,10 @@
-"""Model loading and prediction utilities."""
+"""Model loading utilities for credit scoring pipeline."""
 
 import joblib
 from pathlib import Path
+from typing import Optional
 
-MODEL_PATH = Path(__file__).parent.parent / "models"
+MODEL_DIR = Path(__file__).parent.parent / "models"
 
 _model = None
 _scaler = None
@@ -11,40 +12,41 @@ _feature_names = None
 
 
 def load_artifacts():
-    """Load model, scaler, and feature names from disk."""
+    """Load all model artifacts from disk."""
     global _model, _scaler, _feature_names
 
-    _model = joblib.load(MODEL_PATH / "credit_model.pkl")
-    _scaler = joblib.load(MODEL_PATH / "scaler.pkl")
-    _feature_names = joblib.load(MODEL_PATH / "feature_names.pkl")
+    if _model is None:
+        _model = joblib.load(MODEL_DIR / "credit_model.pkl")
+    if _scaler is None:
+        _scaler = joblib.load(MODEL_DIR / "scaler.pkl")
+    if _feature_names is None:
+        _feature_names = joblib.load(MODEL_DIR / "feature_names.pkl")
 
     return _model, _scaler, _feature_names
 
 
 def get_model():
-    """Get the loaded model, loading if necessary."""
-    global _model
-    if _model is None:
-        load_artifacts()
-    return _model
+    """Get the loaded model artifact."""
+    model, _, _ = load_artifacts()
+    return model
 
 
 def get_scaler():
-    """Get the loaded scaler, loading if necessary."""
-    global _scaler
-    if _scaler is None:
-        load_artifacts()
-    return _scaler
+    """Get the loaded scaler artifact."""
+    _, scaler, _ = load_artifacts()
+    return scaler
 
 
 def get_feature_names():
-    """Get the feature names, loading if necessary."""
-    global _feature_names
-    if _feature_names is None:
+    """Get the loaded feature names."""
+    _, _, feature_names = load_artifacts()
+    return feature_names
+
+
+def is_model_loaded() -> bool:
+    """Check if all model artifacts are loaded."""
+    try:
         load_artifacts()
-    return _feature_names
-
-
-def is_model_loaded():
-    """Check if all artifacts are loaded."""
-    return _model is not None and _scaler is not None and _feature_names is not None
+        return True
+    except Exception:
+        return False
