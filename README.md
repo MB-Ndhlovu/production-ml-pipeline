@@ -1,18 +1,43 @@
 # Production ML Pipeline with FastAPI
 
-A production-ready credit scoring prediction API built with FastAPI.
+A production-ready credit scoring prediction API built with FastAPI, scikit-learn, and joblib.
+
+## Overview
+
+This project provides a RESTful API for credit default prediction, with model artifact loading from a trained pipeline.
 
 ## Features
 
-- REST API for real-time credit default predictions
-- Probability scores and risk band classification
-- Health check endpoint for monitoring
-- Batch prediction support
-- OpenAPI documentation
+- **Credit Risk Prediction**: Predict default probability and risk bands
+- **Health Check**: Monitor API and model status
+- **Batch Prediction**: Process multiple predictions via script
+- **OpenAPI Documentation**: Auto-generated API docs at `/docs`
+
+## Quick Start
+
+### Install Dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+### Run the API
+
+```bash
+python run_api.py
+```
+
+API runs at `http://localhost:8000`
+
+### API Documentation
+
+- Swagger UI: `http://localhost:8000/docs`
+- ReDoc: `http://localhost:8000/redoc`
 
 ## API Endpoints
 
-### `GET /health`
+### GET /health
+
 Health check endpoint.
 
 **Response:**
@@ -23,8 +48,9 @@ Health check endpoint.
 }
 ```
 
-### `POST /predict`
-Predict credit default probability.
+### POST /predict
+
+Predict credit default risk.
 
 **Request Body:**
 ```json
@@ -49,33 +75,41 @@ Predict credit default probability.
 }
 ```
 
-### Risk Bands
+**Risk Bands:**
 - `low`: probability < 0.15
 - `medium`: probability 0.15 - 0.35
 - `high`: probability > 0.35
 
-### Approval Threshold
-Applications with `default_probability < 0.35` are approved.
+**Approval:** `approved` is `true` when `risk_band` is `low` or `medium`.
 
-## Installation
+## Project Structure
 
-```bash
-pip install -r requirements.txt
+```
+production-ml-pipeline/
+├── README.md
+├── requirements.txt
+├── run_api.py
+├── models/
+│   ├── credit_model.pkl
+│   ├── scaler.pkl
+│   └── feature_names.pkl
+├── src/
+│   ├── __init__.py
+│   ├── model.py
+│   ├── predict.py
+│   ├── api.py
+│   └── batch.py
+└── tests/
+    ├── __init__.py
+    └── test_api.py
 ```
 
-## Running the API
+## Model Artifacts
 
-```bash
-python run_api.py
-```
-
-The API will be available at `http://localhost:8000`
-
-## API Documentation
-
-Once running, visit:
-- Swagger UI: `http://localhost:8000/docs`
-- ReDoc: `http://localhost:8000/redoc`
+Model artifacts are downloaded from the credit-scoring-pipeline repository:
+- `credit_model.pkl`: Trained classifier
+- `scaler.pkl`: Feature scaler
+- `feature_names.pkl`: Feature column names
 
 ## Running Tests
 
@@ -83,23 +117,14 @@ Once running, visit:
 pytest tests/
 ```
 
-## Batch Prediction
-
-```bash
-python src/batch.py --url http://localhost:8000 --input data.csv --output predictions.csv
-```
-
 ## Deployment
 
-The API can be deployed using uvicorn:
+For production deployment, use uvicorn with workers:
 
 ```bash
-uvicorn src.api:app --host 0.0.0.0 --port 8000
+uvicorn src.api:app --host 0.0.0.0 --port 8000 --workers 4
 ```
 
-## Model Artifacts
+## License
 
-Model artifacts are loaded from the `models/` directory:
-- `credit_model.pkl` - Trained classifier
-- `scaler.pkl` - Feature scaler
-- `feature_names.pkl` - Ordered feature names
+MIT
