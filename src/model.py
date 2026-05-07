@@ -1,28 +1,23 @@
-import joblib
+"""Model loading utilities."""
 import os
-from pathlib import Path
+import joblib
 
-MODEL_URL = "https://raw.githubusercontent.com/MB-Ndhlovu/credit-scoring-pipeline/main/models"
-
-_models_dir = Path(__file__).parent.parent / "models"
-_models_dir.mkdir(exist_ok=True)
+MODEL_DIR = os.path.join(os.path.dirname(__file__), "..", "models")
 
 
-def _download(url: str, dest: Path) -> None:
-    if not dest.exists():
-        import urllib.request
-        urllib.request.urlretrieve(url, dest)
+def load_model():
+    """Load the trained credit scoring model."""
+    path = os.path.join(MODEL_DIR, "credit_model.pkl")
+    return joblib.load(path)
 
 
-def load_artifacts():
-    _download(f"{MODEL_URL}/credit_model.pkl", _models_dir / "credit_model.pkl")
-    _download(f"{MODEL_URL}/scaler.pkl", _models_dir / "scaler.pkl")
-    _download(f"{MODEL_URL}/feature_names.pkl", _models_dir / "feature_names.pkl")
-
-    model = joblib.load(_models_dir / "credit_model.pkl")
-    scaler = joblib.load(_models_dir / "scaler.pkl")
-    feature_names = joblib.load(_models_dir / "feature_names.pkl")
-    return model, scaler, feature_names
+def load_scaler():
+    """Load the feature scaler."""
+    path = os.path.join(MODEL_DIR, "scaler.pkl")
+    return joblib.load(path)
 
 
-model, scaler, feature_names = load_artifacts()
+def load_feature_names():
+    """Load the expected feature names."""
+    path = os.path.join(MODEL_DIR, "feature_names.pkl")
+    return joblib.load(path)

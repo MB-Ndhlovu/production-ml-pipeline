@@ -1,10 +1,10 @@
 # Production ML Pipeline with FastAPI
 
-Credit risk prediction API using a pre-trained model from the [credit-scoring-pipeline](https://github.com/MB-Ndhlovu/credit-scoring-pipeline) repository.
+A production-ready credit scoring API built with FastAPI, scikit-learn, and Pydantic.
 
 ## Overview
 
-REST API for real-time credit default prediction. Accepts applicant features and returns approval decision, probability score, and risk band.
+This project provides a REST API for credit default prediction. It loads a pre-trained model and scaler from artifacts and exposes endpoints for single and batch predictions.
 
 ## API Endpoints
 
@@ -13,11 +13,14 @@ Health check endpoint.
 
 **Response:**
 ```json
-{"status": "ok", "model_loaded": true}
+{
+  "status": "ok",
+  "model_loaded": true
+}
 ```
 
 ### `POST /predict`
-Predict credit default risk.
+Predict credit default probability.
 
 **Request Body:**
 ```json
@@ -44,34 +47,48 @@ Predict credit default risk.
 
 **Risk Bands:**
 - `low`: probability < 0.15
-- `medium`: probability 0.15 – 0.35
+- `medium`: 0.15 <= probability <= 0.35
 - `high`: probability > 0.35
 
-## Setup
+## Local Development
 
 ```bash
+# Install dependencies
 pip install -r requirements.txt
+
+# Run the API server
 python run_api.py
-```
 
-Server runs at `http://localhost:8000`. OpenAPI docs at `http://localhost:8000/docs`.
-
-## Testing
-
-```bash
+# Run tests
 pytest tests/
 ```
 
 ## Deployment
 
+The API can be deployed to any platform that supports Python ASGI apps (UVicorn).
+
 ```bash
-pip install -r requirements.txt
 uvicorn src.api:app --host 0.0.0.0 --port 8000
 ```
 
-## Model Artifacts
+## Project Structure
 
-Artifacts are downloaded from the credit-scoring-pipeline repository:
-- `credit_model.pkl` — trained classifier
-- `scaler.pkl` — feature scaler
-- `feature_names.pkl` — expected feature names
+```
+production-ml-pipeline/
+├── README.md
+├── requirements.txt
+├── run_api.py
+├── models/
+│   ├── credit_model.pkl
+│   ├── scaler.pkl
+│   └── feature_names.pkl
+├── src/
+│   ├── __init__.py
+│   ├── model.py
+│   ├── predict.py
+│   ├── api.py
+│   └── batch.py
+└── tests/
+    ├── __init__.py
+    └── test_api.py
+```

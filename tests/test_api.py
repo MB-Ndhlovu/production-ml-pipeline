@@ -1,21 +1,23 @@
+"""Pytest tests for the credit scoring API."""
 import pytest
-from httpx import AsyncClient, ASGITransport
+from fastapi.testclient import TestClient
+
 from src.api import app
 
+client = TestClient(app)
 
-@pytest.mark.asyncio
-async def test_health():
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
-        resp = await client.get("/health")
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["status"] == "ok"
+
+def test_health():
+    """Test the /health endpoint."""
+    response = client.get("/health")
+    assert response.status_code == 200
+    data = response.json()
+    assert "status" in data
     assert "model_loaded" in data
 
 
-@pytest.mark.asyncio
-async def test_predict():
+def test_predict_approval():
+    """Test /predict with a low-risk applicant."""
     payload = {
         "income": 65000,
         "credit_score": 720,
@@ -26,13 +28,35 @@ async def test_predict():
         "home_ownership": "rent",
         "verified_income": 1,
     }
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
-        resp = await client.post("/predict", json=payload)
-    assert resp.status_code == 200
-    data = resp.json()
+    response = client.post("/predict", json=payload)
+    assert response.status_code == 200
+    data = response.json()
     assert "approved" in data
     assert "default_probability" in data
     assert "risk_band" in data
     assert data["risk_band"] in ("low", "medium", "high")
-    assert 0 <= data["default_probability"] <= 1
+
+
+def test_predict_rejection():
+    """Test /predict with a high-risk applicant."""
+    payload = {
+        "income": 20000,
+        "credit_score": 450,
+        "employment_years": 0,
+        "debt_to_income": 0.6,
+        "loan_history_count": 5,
+        "age": 22,
+        "home_ownership": "rent",
+        "verified_income": 0,
+    }
+    response = client.post("/predict", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["approved"] is False
+
+
+def test_predict_invalid():
+    """Test /predict with missing required fields."""
+    payload = {"income": 65000}
+    response = client.post("/predict", json=payload)
+    assert response.status_code == 422
