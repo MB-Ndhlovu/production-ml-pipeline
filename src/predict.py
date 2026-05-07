@@ -1,15 +1,14 @@
-from pydantic import BaseModel, Field
 from typing import Literal
 
+from pydantic import BaseModel, Field
 
-class PredictionInput(BaseModel):
-    """Input schema for credit default prediction."""
 
+class PredictInput(BaseModel):
     income: float = Field(..., gt=0, description="Annual income")
-    credit_score: int = Field(..., ge=300, le=850, description="Credit score (300-850)")
-    employment_years: int = Field(..., ge=0, description="Years of employment")
-    debt_to_income: float = Field(..., ge=0, le=1, description="Debt-to-income ratio (0-1)")
-    loan_history_count: int = Field(..., ge=0, description="Number of previous loans")
+    credit_score: int = Field(..., ge=300, le=850, description="Credit score (300–850)")
+    employment_years: float = Field(..., ge=0, description="Years employed")
+    debt_to_income: float = Field(..., ge=0, le=1, description="Debt-to-income ratio (0–1)")
+    loan_history_count: int = Field(..., ge=0, description="Number of past loans")
     age: int = Field(..., ge=18, le=120, description="Applicant age")
     home_ownership: Literal["rent", "own", "mortgage", "other"] = Field(
         ..., description="Home ownership status"
@@ -32,38 +31,61 @@ class PredictionInput(BaseModel):
     }
 
 
-class PredictionOutput(BaseModel):
-    """Output schema for credit default prediction."""
+def predict(input_data: PredictInput) -> dict:
+    """
+    Run a prediction on a single applicant.
 
-    approved: bool = Field(..., description="Whether the application is approved")
-    default_probability: float = Field(
-        ..., ge=0, le=1, description="Predicted probability of default"
-    )
-    risk_band: Literal["low", "medium", "high"] = Field(
-        ..., description="Risk band based on probability"
-    )
+    Returns a dict with:
+      - approved: bool
+      - default_probability: float
+      - risk_band: "low" | "medium" | "high"
+    """
+    from src.model import get_model, get_scaler, get_feature_names
 
-    model_config = {
-        "json_schema_extra": {
-            "example": {
-                "approved": True,
-                "default_probability": 0.12,
-                "risk_band": "low",
-            }
-        }
+    model = get_model()
+    scaler = get_scaler()
+    feature_names = get_feature_names()
+
+    raw_features = {
+        "credit_score": input_data.credit_score,
+        "annual_income": input_data.income,
+        "debt_to_income": input_data.debt_to_income,
+        "employment_years": input_data.employment_years,
+        "loan_amount": input_data.income * 0.5,
+        "interest_rate": 0.12,
+        "verified_income": input_data.verified_income,
+        "num_credit_lines": input_data.loan_history_count,
+        "delinquency_2yrs": 0,
+        "loan_purpose_business": 0,
+        "loan_purpose_debt_consolidation": 1,
+        "loan_purpose_home_improvement": 0,
+        "loan_purpose_major_purchase": 0,
+        "loan_purpose_other": 0,
+        "home_ownership_MORTGAGE": 1 if input_data.home_ownership == "mortgage" else 0,
+        "home_ownership_OTHER": 1 if input_data.home_ownership == "other" else 0,
+        "home_ownership_OWN": 1 if input_data.home_ownership == "own" else 0,
+        "home_ownership_RENT": 1 if input_data.home_ownership == "rent" else 0,
     }
 
+    import pandas as pd
 
-def get_risk_band(probability: float) -> Literal["low", "medium", "high"]:
-    """Determine risk band from probability."""
-    if probability < 0.15:
-        return "low"
-    elif probability <= 0.35:
-        return "medium"
+    X = pd.DataFrame([raw_features])[feature_names]
+    X_scaled = scaler.transform(X)
+
+    prob = float(model.predict_proba(X_scaled)[0, 1])
+
+    if prob < 0.15:
+        band = "low"
+        approved = True
+    elif prob <= 0.35:
+        band = "medium"
+        approved = True
     else:
-        return "high"
+        band = "high"
+        approved = False
 
-
-def is_approved(risk_band: Literal["low", "medium", "high"]) -> bool:
-    """Determine approval from risk band."""
-    return risk_band in ("low", "medium")
+    return {
+        "approved": approved,
+        "default_probability": round(prob, 4),
+        "risk_band": band,
+    }

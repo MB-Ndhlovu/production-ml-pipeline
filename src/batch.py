@@ -1,55 +1,44 @@
 #!/usr/bin/env python3
-"""
-Batch prediction script.
+"""Batch prediction script — calls the /predict endpoint for each row in a CSV."""
 
-Reads input data and sends predictions via the API.
-"""
-
+import argparse
 import json
-import httpx
+
 import pandas as pd
-from pathlib import Path
+import requests
 
 
-def batch_predict(data_file: str, api_url: str = "http://localhost:8000/predict"):
-    """Send batch predictions to the API."""
-    df = pd.read_csv(data_file)
-
+def run_batch(input_path: str, output_path: str, base_url: str = "http://localhost:8000"):
+    df = pd.read_csv(input_path)
     results = []
-    with httpx.Client(timeout=30.0) as client:
-        for _, row in df.iterrows():
-            payload = {
-                "income": float(row["income"]),
-                "credit_score": int(row["credit_score"]),
-                "employment_years": int(row["employment_years"]),
-                "debt_to_income": float(row["debt_to_income"]),
-                "loan_history_count": int(row["loan_history_count"]),
-                "age": int(row["age"]),
-                "home_ownership": row["home_ownership"],
-                "verified_income": int(row["verified_income"]),
-            }
 
-            response = client.post(api_url, json=payload)
-            response.raise_for_status()
-            results.append(response.json())
+    for _, row in df.iterrows():
+        payload = {
+            "income": float(row["income"]),
+            "credit_score": int(row["credit_score"]),
+            "employment_years": float(row["employment_years"]),
+            "debt_to_income": float(row["debt_to_income"]),
+            "loan_history_count": int(row["loan_history_count"]),
+            "age": int(row["age"]),
+            "home_ownership": str(row["home_ownership"]),
+            "verified_income": int(row["verified_income"]),
+        }
+        resp = requests.post(f"{base_url}/predict", json=payload, timeout=30)
+        resp.raise_for_status()
+        results.append(resp.json())
 
-    return results
+    out_df = df.copy()
+    out_df["approved"] = [r["approved"] for r in results]
+    out_df["default_probability"] = [r["default_probability"] for r in results]
+    out_df["risk_band"] = [r["risk_band"] for r in results]
+    out_df.to_csv(output_path, index=False)
+    print(f"Saved {len(results)} predictions to {output_path}")
 
 
 if __name__ == "__main__":
-    import argparse
-
     parser = argparse.ArgumentParser(description="Batch prediction via API")
-    parser.add_argument("data_file", help="CSV file with input data")
-    parser.add_argument("--url", default="http://localhost:8000/predict", help="API URL")
-    parser.add_argument("--output", help="Output JSON file", default=None)
-
+    parser.add_argument("--input", required=True, help="Input CSV path")
+    parser.add_argument("--output", required=True, help="Output CSV path")
+    parser.add_argument("--url", default="http://localhost:8000", help="API base URL")
     args = parser.parse_args()
-
-    results = batch_predict(args.data_file, args.url)
-
-    if args.output:
-        Path(args.output).write_text(json.dumps(results, indent=2))
-        print(f"Results saved to {args.output}")
-    else:
-        print(json.dumps(results, indent=2))
+    run_batch(args.input, args.output, args.url)
