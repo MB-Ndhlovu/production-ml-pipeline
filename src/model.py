@@ -1,43 +1,28 @@
 import joblib
+import os
 from pathlib import Path
 
-MODEL_DIR = Path(__file__).parent.parent / "models"
+MODEL_URL = "https://raw.githubusercontent.com/MB-Ndhlovu/credit-scoring-pipeline/main/models"
 
-_model = None
-_scaler = None
-_feature_names = None
+_models_dir = Path(__file__).parent.parent / "models"
+_models_dir.mkdir(exist_ok=True)
 
 
-def _patch_model(model):
-    if not hasattr(model, "multi_class"):
-        model.multi_class = "auto"
-    if not hasattr(model, "n_features_in_"):
-        model.n_features_in_ = 18
-    return model
+def _download(url: str, dest: Path) -> None:
+    if not dest.exists():
+        import urllib.request
+        urllib.request.urlretrieve(url, dest)
 
 
 def load_artifacts():
-    """Load model, scaler, and feature names from disk."""
-    global _model, _scaler, _feature_names
-    _model = _patch_model(joblib.load(MODEL_DIR / "credit_model.pkl"))
-    _scaler = joblib.load(MODEL_DIR / "scaler.pkl")
-    _feature_names = joblib.load(MODEL_DIR / "feature_names.pkl")
-    return _model, _scaler, _feature_names
+    _download(f"{MODEL_URL}/credit_model.pkl", _models_dir / "credit_model.pkl")
+    _download(f"{MODEL_URL}/scaler.pkl", _models_dir / "scaler.pkl")
+    _download(f"{MODEL_URL}/feature_names.pkl", _models_dir / "feature_names.pkl")
+
+    model = joblib.load(_models_dir / "credit_model.pkl")
+    scaler = joblib.load(_models_dir / "scaler.pkl")
+    feature_names = joblib.load(_models_dir / "feature_names.pkl")
+    return model, scaler, feature_names
 
 
-def get_model():
-    if _model is None:
-        load_artifacts()
-    return _model
-
-
-def get_scaler():
-    if _scaler is None:
-        load_artifacts()
-    return _scaler
-
-
-def get_feature_names():
-    if _feature_names is None:
-        load_artifacts()
-    return _feature_names
+model, scaler, feature_names = load_artifacts()

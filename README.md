@@ -1,23 +1,25 @@
-# Production ML Pipeline — Credit Scoring API
+# Production ML Pipeline with FastAPI
 
-REST API for real-time credit default prediction, built with FastAPI.
+Credit risk prediction API using a pre-trained model from the [credit-scoring-pipeline](https://github.com/MB-Ndhlovu/credit-scoring-pipeline) repository.
 
 ## Overview
 
-- **Model**: Logistic regression credit default classifier
-- **Input**: Applicant features (income, credit score, employment, etc.)
-- **Output**: Approval decision, default probability, risk band
+REST API for real-time credit default prediction. Accepts applicant features and returns approval decision, probability score, and risk band.
 
 ## API Endpoints
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/health` | Health check — confirms model is loaded |
-| POST | `/predict` | Single prediction with probability + risk band |
+### `GET /health`
+Health check endpoint.
 
-### POST /predict
+**Response:**
+```json
+{"status": "ok", "model_loaded": true}
+```
 
-**Request body:**
+### `POST /predict`
+Predict credit default risk.
+
+**Request Body:**
 ```json
 {
   "income": 65000,
@@ -40,46 +42,36 @@ REST API for real-time credit default prediction, built with FastAPI.
 }
 ```
 
-### GET /health
+**Risk Bands:**
+- `low`: probability < 0.15
+- `medium`: probability 0.15 – 0.35
+- `high`: probability > 0.35
 
-```json
-{
-  "status": "ok",
-  "model_loaded": true
-}
-```
-
-## Risk Bands
-
-| Band | Probability Range |
-|------|-------------------|
-| low | < 0.15 |
-| medium | 0.15 – 0.35 |
-| high | > 0.35 |
-
-## Local Development
+## Setup
 
 ```bash
-# Install dependencies
 pip install -r requirements.txt
-
-# Run the server
 python run_api.py
-
-# Run tests
-pytest tests/
 ```
 
-## Batch Prediction
+Server runs at `http://localhost:8000`. OpenAPI docs at `http://localhost:8000/docs`.
+
+## Testing
 
 ```bash
-python src/batch.py --input data.csv --output predictions.csv
+pytest tests/
 ```
 
 ## Deployment
 
-The API is stateless — deploy behind a reverse proxy (nginx, Traefik) and scale horizontally. Use `run_api.py` or uvicorn directly:
-
 ```bash
+pip install -r requirements.txt
 uvicorn src.api:app --host 0.0.0.0 --port 8000
 ```
+
+## Model Artifacts
+
+Artifacts are downloaded from the credit-scoring-pipeline repository:
+- `credit_model.pkl` — trained classifier
+- `scaler.pkl` — feature scaler
+- `feature_names.pkl` — expected feature names
