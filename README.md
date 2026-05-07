@@ -1,28 +1,28 @@
 # Production ML Pipeline with FastAPI
 
-A production-ready credit scoring API built with FastAPI, scikit-learn, and Pydantic.
+A production-ready credit scoring API powered by FastAPI. Serves a trained logistic regression model with standardized predictions, probability outputs, and risk banding.
 
-## Overview
+## Features
 
-This project provides a REST API for credit default prediction. It loads a pre-trained model and scaler from artifacts and exposes endpoints for single and batch predictions.
+- **Real-time predictions** via REST API
+- **Probability output** with calibrated risk bands
+- **Health check endpoint** for monitoring
+- **Batch prediction support** via script
+- **OpenAPI documentation** at `/docs`
 
 ## API Endpoints
 
 ### `GET /health`
-Health check endpoint.
+Health check. Returns whether the model is loaded and ready.
 
-**Response:**
 ```json
-{
-  "status": "ok",
-  "model_loaded": true
-}
+{ "status": "ok", "model_loaded": true }
 ```
 
 ### `POST /predict`
-Predict credit default probability.
+Submit a credit application for scoring.
 
-**Request Body:**
+**Request body:**
 ```json
 {
   "income": 65000,
@@ -45,10 +45,10 @@ Predict credit default probability.
 }
 ```
 
-**Risk Bands:**
-- `low`: probability < 0.15
-- `medium`: 0.15 <= probability <= 0.35
-- `high`: probability > 0.35
+**Risk bands:**
+- `low` — probability < 0.15
+- `medium` — probability 0.15 – 0.35
+- `high` — probability > 0.35
 
 ## Local Development
 
@@ -56,18 +56,23 @@ Predict credit default probability.
 # Install dependencies
 pip install -r requirements.txt
 
-# Run the API server
+# Run the server
 python run_api.py
+```
 
-# Run tests
-pytest tests/
+API available at `http://localhost:8000`. Docs at `http://localhost:8000/docs`.
+
+## Running Tests
+
+```bash
+pip install pytest httpx
+pytest tests/ -v
 ```
 
 ## Deployment
 
-The API can be deployed to any platform that supports Python ASGI apps (UVicorn).
-
 ```bash
+# Production server (uvicorn)
 uvicorn src.api:app --host 0.0.0.0 --port 8000
 ```
 
@@ -84,10 +89,10 @@ production-ml-pipeline/
 │   └── feature_names.pkl
 ├── src/
 │   ├── __init__.py
-│   ├── model.py
-│   ├── predict.py
-│   ├── api.py
-│   └── batch.py
+│   ├── model.py       # Model & artifact loading
+│   ├── predict.py     # Pydantic schemas & prediction logic
+│   ├── api.py         # FastAPI app
+│   └── batch.py       # Batch prediction script
 └── tests/
     ├── __init__.py
     └── test_api.py
