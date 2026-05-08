@@ -1,28 +1,55 @@
-"""Batch prediction script — queries the local API for multiple applications."""
+"""Batch prediction script using the API."""
+
 import argparse
-import httpx
 import json
+import sys
+from pathlib import Path
+
+import requests
+
+DEFAULT_URL = "http://localhost:8000"
 
 
-def run_batch(file_path: str, base_url: str = "http://localhost:8000"):
-    """Read applications from a JSON file and print predictions."""
-    with open(file_path) as f:
-        applications = json.load(f)
+def load_json_records(path: Path) -> list[dict]:
+    """Load JSON records from a file (one object per line or array)."""
+    text = path.read_text().strip()
+    if text.startswith("["):
+        return json.loads(text)
+    return [json.loads(line) for line in text.splitlines() if line.strip()]
 
+
+def run_batch(api_url: str, input_path: Path, output_path: Path | None = None):
+    """Send batch records to the /predict endpoint and optionally save results."""
+    records = load_json_records(input_path)
     results = []
-    with httpx.Client(base_url=base_url, timeout=30.0) as client:
-        for app in applications:
-            resp = client.post("/predict", json=app)
-            resp.raise_for_status()
-            results.append(resp.json())
 
-    for r in results:
-        print(r)
+    for i, record in enumerate(records):
+        try:
+            resp = requests.post(f"{api_url}/predict", json=record, timeout=30)
+            resp.raise_for_status()
+            result = resp.json()
+            result["_record_idx"] = i
+            result["_success"] = True
+            results.append(result)
+            print(f"  [{i}] approved={result['approved']} prob={result['default_probability']} band={result['risk_band']}")
+        except Exception as e:
+            results.append({"_record_idx": i, "_success": False, "error": str(e)})
+            print(f"  [{i}] FAILED: {e}")
+
+    print(f"\nProcessed {len(records)} records: {sum(r.get('_success', False) for r in results)} succeeded")
+
+    if output_path:
+        output_path.write_text(json.dumps(results, indent=2))
+        print(f"Results saved to {output_path}")
+
+    return results
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Batch predict via API")
-    parser.add_argument("file", help="JSON file with array of applications")
-    parser.add_argument("--url", default="http://localhost:8000", help="API base URL")
+    parser = argparse.ArgumentParser(description="Batch prediction via API")
+    parser.add_argument("--url", default=DEFAULT_URL, help="API base URL")
+    parser.add_argument("--input", required=True, type=Path, help="Input JSON file")
+    parser.add_argument("--output", type=Path, help="Output JSON file (optional)")
     args = parser.parse_args()
-    run_batch(args.file, args.url)
+
+    run_batch(args.url, args.input, args.output)

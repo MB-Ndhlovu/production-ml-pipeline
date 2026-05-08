@@ -1,96 +1,68 @@
-"""Prediction logic and Pydantic schemas."""
-from enum import Enum
+"""Pydantic schemas and prediction interface."""
+
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
-from src.model import load_model, load_scaler, load_feature_names
+from src.model import predict as model_predict
 
 
-class RiskBand(str, Enum):
-    """Risk classification bands."""
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
+class PredictInput(BaseModel):
+    """Input schema for /predict endpoint."""
 
-
-class CreditApplication(BaseModel):
-    """Input schema for a credit application."""
-    income: float = Field(..., description="Annual income in ZAR")
-    credit_score: int = Field(..., description="Credit score (300–850)")
+    income: float = Field(..., description="Annual income")
+    credit_score: int = Field(..., description="Credit score (300-850)")
     employment_years: int = Field(..., description="Years employed")
-    debt_to_income: float = Field(..., ge=0, le=1, description="Debt-to-income ratio")
-    loan_history_count: int = Field(..., ge=0, description="Number of prior loans")
-    age: int = Field(..., ge=18, le=120, description="Applicant age")
-    home_ownership: str = Field(..., description="'rent', 'own', or 'mortgage'")
+    debt_to_income: float = Field(..., description="Debt-to-income ratio")
+    loan_history_count: int = Field(..., description="Number of prior loans")
+    age: int = Field(..., description="Applicant age")
+    home_ownership: Literal["rent", "own", "mortgage", "other"] = Field(
+        ..., description="Home ownership status"
+    )
     verified_income: int = Field(..., description="Income verified (0 or 1)")
-    interest_rate: float = Field(
-        default=0.12,
-        description="Interest rate as decimal fraction (e.g., 0.12 for 12%)"
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "income": 65000,
+                "credit_score": 720,
+                "employment_years": 5,
+                "debt_to_income": 0.28,
+                "loan_history_count": 2,
+                "age": 34,
+                "home_ownership": "rent",
+                "verified_income": 1,
+            }
+        }
+    }
+
+
+class PredictOutput(BaseModel):
+    """Output schema for /predict endpoint."""
+
+    approved: bool = Field(..., description="Whether the application is approved")
+    default_probability: float = Field(
+        ..., description="Estimated probability of default"
+    )
+    risk_band: Literal["low", "medium", "high"] = Field(
+        ..., description="Risk classification band"
     )
 
 
-class PredictionResponse(BaseModel):
-    """API response for a prediction."""
-    approved: bool
-    default_probability: float
-    risk_band: RiskBand
-
-
-def classify_risk(probability: float) -> RiskBand:
-    """Classify probability into a risk band."""
-    if probability < 0.15:
-        return RiskBand.LOW
-    elif probability <= 0.35:
-        return RiskBand.MEDIUM
-    else:
-        return RiskBand.HIGH
-
-
-def predict_default(application: CreditApplication) -> PredictionResponse:
+def make_prediction(input_data: PredictInput) -> PredictOutput:
     """
-    Run the credit model on a single application.
+    Run the credit scoring model on the given input.
 
-    Returns the default probability, approval decision, and risk band.
-    Approval is granted when probability < 0.25.
+    Args:
+        input_data: Validated Pydantic input schema.
+
+    Returns:
+        PredictOutput with approval decision, probability, and risk band.
     """
-    model = load_model()
-    scaler = load_scaler()
-    feature_names = load_feature_names()
-
-    # Build feature vector — map user-friendly names to model features
-    raw_features = {
-        "annual_income": application.income,
-        "credit_score": application.credit_score,
-        "employment_years": application.employment_years,
-        "debt_to_income": application.debt_to_income,
-        "num_credit_lines": application.loan_history_count,
-        "verified_income": application.verified_income,
-        "interest_rate": application.interest_rate,
-        # Defaults for features not exposed in the public API
-        "loan_amount": 10000,
-        "delinquency_2yrs": 0,
-        "loan_purpose_business": 0,
-        "loan_purpose_debt_consolidation": 0,
-        "loan_purpose_home_improvement": 0,
-        "loan_purpose_major_purchase": 0,
-        "loan_purpose_other": 1,
-    }
-
-    # Home ownership one-hot (model uses uppercase prefix)
-    home = application.home_ownership.lower()
-    for val, prefix in [("rent", "RENT"), ("own", "OWN"), ("mortgage", "MORTGAGE")]:
-        raw_features[f"home_ownership_{prefix}"] = int(home == val)
-    raw_features["home_ownership_OTHER"] = 0
-
-    # Assemble in the exact order the model expects
-    feature_vector = [[raw_features[f] for f in feature_names]]
-
-    # Scale and predict
-    scaled = scaler.transform(feature_vector)
-    probability = float(model.predict_proba(scaled)[0, 1])
-    approved = probability < 0.25
-
-    return PredictionResponse(
+    features = input_data.model_dump()
+    prob, approved, risk_band = model_predict(features)
+    return PredictOutput(
         approved=approved,
-        default_probability=round(probability, 6),
-        risk_band=classify_risk(probability),
+        default_probability=round(prob, 4),
+        risk_band=risk_band,
     )
