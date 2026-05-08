@@ -1,31 +1,43 @@
-# Production ML Pipeline with FastAPI
+# Production ML Pipeline
 
-Credit scoring prediction API built with FastAPI for serving a scikit-learn model in production.
+A FastAPI-based REST API for credit default prediction, exposing a single `/predict` endpoint and a health check.
 
-## Overview
+## Features
 
-This API serves a pre-trained credit scoring model. It accepts applicant features and returns:
-- Approval decision
-- Default probability estimate
-- Risk band classification
+- **REST API** via FastAPI + Uvicorn
+- **Single-record prediction** with probability and risk band
+- **Batch prediction** via a companion script
+- **Health check** endpoint for load-balancer probes
+- **OpenAPI documentation** at `/docs`
 
-## API Endpoints
+## Model Artifacts
+
+The pipeline expects three pickled artifacts inside `models/`:
+
+| File | Description |
+|------|-------------|
+| `credit_model.pkl` | Trained classifier (scikit-learn estimator) |
+| `scaler.pkl` | Fitted `StandardScaler` (or equivalent) |
+| `feature_names.pkl` | List of feature column names in expected order |
+
+These are downloaded from the
+[credit-scoring-pipeline](https://github.com/MB-Ndhlovu/credit-scoring-pipeline) repository.
+Replace them with your own trained artifacts as needed.
+
+## API
 
 ### `GET /health`
-Health check endpoint.
 
-**Response:**
+Returns the service health status.
+
 ```json
-{
-  "status": "ok",
-  "model_loaded": true
-}
+{ "status": "ok", "model_loaded": true }
 ```
 
 ### `POST /predict`
-Make a credit approval prediction.
 
-**Request Body:**
+**Request body**
+
 ```json
 {
   "income": 65000,
@@ -39,7 +51,19 @@ Make a credit approval prediction.
 }
 ```
 
-**Response:**
+| Field | Type | Description |
+|-------|------|-------------|
+| `income` | float | Annual income |
+| `credit_score` | int | Credit score (300–850 typical) |
+| `employment_years` | float | Years employed |
+| `debt_to_income` | float | Debt-to-income ratio (0–1) |
+| `loan_history_count` | int | Number of past loans |
+| `age` | int | Applicant age |
+| `home_ownership` | string | One of `"rent"`, `"own"`, `"mortgage"`, `"other"` |
+| `verified_income` | int | 1 if income is verified, 0 otherwise |
+
+**Response**
+
 ```json
 {
   "approved": true,
@@ -48,41 +72,64 @@ Make a credit approval prediction.
 }
 ```
 
-**Risk Bands:**
-| Band | Probability Range |
-|------|------------------|
-| low | < 0.15 |
-| medium | 0.15 – 0.35 |
-| high | > 0.35 |
+**Risk bands**
 
-## Installation
+| Band | Probability range |
+|------|--------------------|
+| `low` | < 0.15 |
+| `medium` | 0.15 – 0.35 |
+| `high` | > 0.35 |
+
+## Development
 
 ```bash
+# Install dependencies
 pip install -r requirements.txt
-```
 
-## Running Locally
-
-```bash
+# Run the API locally
 python run_api.py
+# API available at http://localhost:8000
+# Docs at http://localhost:8000/docs
+
+# Run tests
+pytest tests/ -v
 ```
-
-The server starts at `http://localhost:8000`. API docs available at `/docs`.
-
-## Running Tests
-
-```bash
-pytest tests/
-```
-
-## Model Artifacts
-
-Model artifacts (`credit_model.pkl`, `scaler.pkl`, `feature_names.pkl`) are downloaded from the [credit-scoring-pipeline](https://github.com/MB-Ndhlovu/credit-scoring-pipeline) repository on startup.
 
 ## Deployment
 
-Recommended: Uvicorn with a process manager (e.g., systemd, supervisord).
+The API is a standard FastAPI + Uvicorn application. To deploy:
 
 ```bash
-uvicorn src.api:app --host 0.0.0.0 --port 8000
+# Example with gunicorn + uvicorn workers
+gunicorn src.api:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
+```
+
+Or containerise with Docker:
+
+```dockerfile
+FROM python:3.11-slim
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY . .
+CMD ["python", "run_api.py"]
+```
+
+## Project Structure
+
+```
+production-ml-pipeline/
+├── models/              # Serialised model artefacts
+├── src/
+│   ├── __init__.py
+│   ├── api.py           # FastAPI app definition
+│   ├── model.py         # Model loading utilities
+│   ├── predict.py       # Pydantic schemas + prediction logic
+│   └── batch.py         # Batch prediction script
+├── tests/
+│   ├── __init__.py
+│   └── test_api.py      # pytest API tests
+├── run_api.py           # Local dev entry point
+├── requirements.txt
+└── README.md
 ```

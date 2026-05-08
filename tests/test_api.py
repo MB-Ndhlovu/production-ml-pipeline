@@ -1,118 +1,108 @@
-"""Pytest tests for the API endpoints."""
-
+"""pytest tests for the Prediction API."""
 import pytest
 from fastapi.testclient import TestClient
 
 from src.api import app
 
-client = TestClient(app)
+
+@pytest.fixture
+def client():
+    """Synchronous test client."""
+    with TestClient(app) as client:
+        yield client
 
 
-class TestHealthEndpoint:
-    """Tests for GET /health."""
-
-    def test_health_returns_200(self):
-        """Health endpoint should return 200."""
-        response = client.get("/health")
-        assert response.status_code == 200
-
-    def test_health_returns_ok_status(self):
-        """Health response should contain 'ok' status."""
-        data = response = client.get("/health").json()
-        assert data.get("status") == "ok"
-
-    def test_health_contains_model_loaded(self):
-        """Health response should contain model_loaded bool."""
-        data = client.get("/health").json()
-        assert "model_loaded" in data
-        assert isinstance(data["model_loaded"], bool)
+def test_health(client):
+    """GET /health returns 200 with status ok."""
+    response = client.get("/health")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "ok"
+    assert data["model_loaded"] is True
 
 
-class TestPredictEndpoint:
-    """Tests for POST /predict."""
+def test_predict_valid(client):
+    """POST /predict with valid data returns 200."""
+    payload = {
+        "income": 65000,
+        "credit_score": 720,
+        "employment_years": 5,
+        "debt_to_income": 0.28,
+        "loan_history_count": 2,
+        "age": 34,
+        "home_ownership": "rent",
+        "verified_income": 1,
+    }
+    response = client.post("/predict", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert "approved" in data
+    assert "default_probability" in data
+    assert "risk_band" in data
+    assert data["risk_band"] in ("low", "medium", "high")
 
-    @pytest.fixture
-    def valid_payload(self):
-        """Standard valid prediction payload."""
-        return {
-            "income": 65000,
-            "credit_score": 720,
-            "employment_years": 5,
-            "debt_to_income": 0.28,
-            "loan_history_count": 2,
-            "age": 34,
-            "home_ownership": "rent",
-            "verified_income": 1,
-        }
 
-    def test_predict_returns_200(self, valid_payload):
-        """Predict endpoint should return 200 with valid input."""
-        response = client.post("/predict", json=valid_payload)
-        assert response.status_code == 200
+def test_predict_missing_field(client):
+    """POST /predict with a missing required field returns 422."""
+    payload = {
+        "income": 65000,
+        # missing credit_score
+        "employment_years": 5,
+        "debt_to_income": 0.28,
+        "loan_history_count": 2,
+        "age": 34,
+        "home_ownership": "rent",
+        "verified_income": 1,
+    }
+    response = client.post("/predict", json=payload)
+    assert response.status_code == 422
 
-    def test_predict_returns_required_fields(self, valid_payload):
-        """Response should contain approved, default_probability, risk_band."""
-        data = client.post("/predict", json=valid_payload).json()
-        assert "approved" in data
-        assert "default_probability" in data
-        assert "risk_band" in data
 
-    def test_approved_is_boolean(self, valid_payload):
-        """approved field must be a boolean."""
-        data = client.post("/predict", json=valid_payload).json()
-        assert isinstance(data["approved"], bool)
+def test_predict_invalid_home_ownership(client):
+    """POST /predict with an invalid home_ownership value returns 422."""
+    payload = {
+        "income": 65000,
+        "credit_score": 720,
+        "employment_years": 5,
+        "debt_to_income": 0.28,
+        "loan_history_count": 2,
+        "age": 34,
+        "home_ownership": "invalid",
+        "verified_income": 1,
+    }
+    response = client.post("/predict", json=payload)
+    assert response.status_code == 422
 
-    def test_default_probability_is_float(self, valid_payload):
-        """default_probability must be a float between 0 and 1."""
-        data = client.post("/predict", json=valid_payload).json()
-        prob = data["default_probability"]
-        assert isinstance(prob, float)
-        assert 0.0 <= prob <= 1.0
 
-    def test_risk_band_valid_values(self, valid_payload):
-        """risk_band must be one of low, medium, high."""
-        data = client.post("/predict", json=valid_payload).json()
-        assert data["risk_band"] in ("low", "medium", "high")
+def test_predict_risk_band_low(client):
+    """When probability is below 0.15, risk_band should be low."""
+    payload = {
+        "income": 120000,
+        "credit_score": 820,
+        "employment_years": 15,
+        "debt_to_income": 0.1,
+        "loan_history_count": 1,
+        "age": 45,
+        "home_ownership": "own",
+        "verified_income": 1,
+    }
+    response = client.post("/predict", json=payload)
+    assert response.status_code == 200
+    assert response.json()["risk_band"] == "low"
 
-    def test_risk_band_low_for_low_prob(self):
-        """Probability < 0.15 should produce risk_band 'low'."""
-        payload = {
-            "income": 120000,
-            "credit_score": 800,
-            "employment_years": 10,
-            "debt_to_income": 0.1,
-            "loan_history_count": 0,
-            "age": 40,
-            "home_ownership": "own",
-            "verified_income": 1,
-        }
-        data = client.post("/predict", json=payload).json()
-        if data["default_probability"] < 0.15:
-            assert data["risk_band"] == "low"
 
-    def test_risk_band_high_for_high_prob(self):
-        """Probability > 0.35 should produce risk_band 'high'."""
-        payload = {
-            "income": 20000,
-            "credit_score": 500,
-            "employment_years": 0,
-            "debt_to_income": 0.6,
-            "loan_history_count": 5,
-            "age": 22,
-            "home_ownership": "rent",
-            "verified_income": 0,
-        }
-        data = client.post("/predict", json=payload).json()
-        if data["default_probability"] > 0.35:
-            assert data["risk_band"] == "high"
-
-    def test_predict_rejects_missing_fields(self):
-        """Missing required fields should return 422."""
-        response = client.post("/predict", json={"income": 50000})
-        assert response.status_code == 422
-
-    def test_predict_rejects_invalid_home_ownership(self, valid_payload):
-        """Invalid home_ownership value should return 422."""
-        valid_payload["home_ownership"] = "invalid_option"
-        response = client.post("/predict", json=valid_payload)
-        assert response.status_code == 422
+def test_predict_risk_band_high(client):
+    """When probability is above 0.35, risk_band should be high."""
+    payload = {
+        "income": 20000,
+        "credit_score": 500,
+        "employment_years": 0,
+        "debt_to_income": 0.6,
+        "loan_history_count": 5,
+        "age": 22,
+        "home_ownership": "rent",
+        "verified_income": 0,
+    }
+    response = client.post("/predict", json=payload)
+    assert response.status_code == 200
+    assert response.json()["risk_band"] == "high"

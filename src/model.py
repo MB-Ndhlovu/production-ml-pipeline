@@ -1,81 +1,43 @@
-"""Model loading and prediction utilities."""
-
-import os
-from pathlib import Path
-
+"""Model loading utilities."""
 import joblib
-import requests
+from pathlib import Path
+from typing import Any
 
-MODEL_BASE_URL = "https://raw.githubusercontent.com/MB-Ndhlovu/credit-scoring-pipeline/main/models"
 MODEL_DIR = Path(__file__).parent.parent / "models"
 
-_model = None
-_scaler = None
-_feature_names = None
+_model: Any = None
+_scaler: Any = None
+_feature_names: list[str] | None = None
 
 
-def _download_artifacts():
-    """Download model artifacts from the credit-scoring-pipeline repo."""
-    MODEL_DIR.mkdir(parents=True, exist_ok=True)
-    artifacts = ["credit_model.pkl", "scaler.pkl", "feature_names.pkl"]
-    for name in artifacts:
-        dest = MODEL_DIR / name
-        if not dest.exists():
-            resp = requests.get(f"{MODEL_BASE_URL}/{name}", timeout=30)
-            resp.raise_for_status()
-            dest.write_bytes(resp.content)
-
-
-def load_model_artifacts():
-    """Load model, scaler, and feature names from disk."""
+def load_artifacts() -> tuple[Any, Any, list[str]]:
+    """Load and return (model, scaler, feature_names) from models/."""
     global _model, _scaler, _feature_names
-
-    if _model is None:
-        _download_artifacts()
-        _model = joblib.load(MODEL_DIR / "credit_model.pkl")
-        _scaler = joblib.load(MODEL_DIR / "scaler.pkl")
-        _feature_names = joblib.load(MODEL_DIR / "feature_names.pkl")
-
+    _model = joblib.load(MODEL_DIR / "credit_model.pkl")
+    _scaler = joblib.load(MODEL_DIR / "scaler.pkl")
+    _feature_names = joblib.load(MODEL_DIR / "feature_names.pkl")
     return _model, _scaler, _feature_names
 
 
-def predict(features: dict) -> tuple[float, bool, str]:
-    """
-    Run prediction on a feature dict.
+def get_model() -> Any:
+    """Return the loaded model, loading if necessary."""
+    global _model
+    if _model is None:
+        load_artifacts()
+    return _model
 
-    Returns:
-        tuple: (default_probability, approved, risk_band)
-    """
-    model, scaler, feature_names = load_model_artifacts()
 
-    import pandas as pd
+def get_scaler() -> Any:
+    """Return the loaded scaler, loading if necessary."""
+    global _scaler
+    if _scaler is None:
+        load_artifacts()
+    return _scaler
 
-    df = pd.DataFrame([features])
 
-    # One-hot encode home_ownership if present
-    if "home_ownership" in df.columns:
-        home_ownership = df["home_ownership"].iloc[0]
-        for col in feature_names:
-            if col.startswith("home_ownership_"):
-                df[col] = 1 if col == f"home_ownership_{home_ownership}" else 0
-        df = df.drop(columns=["home_ownership"])
-
-    # Ensure correct column order
-    for col in feature_names:
-        if col not in df.columns:
-            df[col] = 0
-    df = df[feature_names]
-
-    # Scale and predict
-    X = scaler.transform(df)
-    prob = float(model.predict_proba(X)[0, 1])
-
-    approved = prob < 0.35
-    if prob < 0.15:
-        risk_band = "low"
-    elif prob <= 0.35:
-        risk_band = "medium"
-    else:
-        risk_band = "high"
-
-    return prob, approved, risk_band
+def get_feature_names() -> list[str]:
+    """Return the loaded feature names, loading if necessary."""
+    global _feature_names
+    if _feature_names is None:
+        load_artifacts()
+    return _feature_names
