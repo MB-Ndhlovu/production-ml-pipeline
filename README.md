@@ -1,43 +1,17 @@
-# Production ML Pipeline
+# Production ML Pipeline with FastAPI
 
-A FastAPI-based microservice for real-time credit default prediction.
+A production-ready credit scoring prediction API built with FastAPI.
 
 ## Overview
 
-This service loads a pre-trained credit scoring model and provides a REST API for predicting default probability and risk classification.
-
-## Features
-
-- Real-time single-prediction endpoint
-- Batch prediction support
-- Health check endpoint
-- OpenAPI documentation
-
-## Installation
-
-```bash
-pip install -r requirements.txt
-```
-
-## Running the API
-
-```bash
-python run_api.py
-```
-
-The server starts on `http://localhost:8000`.
+This project exposes a trained credit scoring model via a REST API with health checks, individual predictions, and batch processing support.
 
 ## API Endpoints
 
-### GET /health
+### `GET /health`
+Health check endpoint.
 
-Health check. Returns model loading status.
-
-```bash
-curl http://localhost:8000/health
-```
-
-Response:
+**Response:**
 ```json
 {
   "status": "ok",
@@ -45,12 +19,10 @@ Response:
 }
 ```
 
-### POST /predict
+### `POST /predict`
+Make a credit default prediction.
 
-Predict credit default risk.
-
-**Request body:**
-
+**Request Body:**
 ```json
 {
   "income": 65000,
@@ -65,7 +37,6 @@ Predict credit default risk.
 ```
 
 **Response:**
-
 ```json
 {
   "approved": true,
@@ -74,54 +45,48 @@ Predict credit default risk.
 }
 ```
 
-**Risk bands:**
+**Risk Bands:**
 - `low`: probability < 0.15
-- `medium`: probability 0.15–0.35
+- `medium`: probability 0.15 – 0.35
 - `high`: probability > 0.35
 
-## Testing
+**Approval Rule:** `approved = true` if probability < 0.35.
+
+## Installation
+
+```bash
+pip install -r requirements.txt
+```
+
+## Local Development
+
+```bash
+python run_api.py
+```
+
+The server starts at `http://localhost:8000`. API docs are available at `http://localhost:8000/docs`.
+
+## Running Tests
 
 ```bash
 pytest tests/ -v
 ```
 
-## Deployment
-
-### Local Production
+## Batch Prediction
 
 ```bash
-uvicorn src.api:app --host 0.0.0.0 --port 8000
+python src/batch.py --url http://localhost:8000 --input data.csv --output predictions.csv
 ```
 
-### Docker
+## Deployment
 
-```dockerfile
-FROM python:3.11-slim
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-COPY . /app
-WORKDIR /app
-CMD ["uvicorn", "src.api:app", "--host", "0.0.0.0", "--port", "8000"]
-```
+1. Set environment variables for any secrets.
+2. Run with uvicorn: `uvicorn src.api:app --host 0.0.0.0 --port $PORT`
+3. For production, use gunicorn with uvicorn workers.
 
-## Project Structure
+## Model Artifacts
 
-```
-production-ml-pipeline/
-├── README.md
-├── requirements.txt
-├── run_api.py
-├── models/
-│   ├── credit_model.pkl
-│   ├── scaler.pkl
-│   └── feature_names.pkl
-├── src/
-│   ├── __init__.py
-│   ├── api.py
-│   ├── model.py
-│   ├── predict.py
-│   └── batch.py
-└── tests/
-    ├── __init__.py
-    └── test_api.py
-```
+Model artifacts are downloaded from the [credit-scoring-pipeline](https://github.com/MB-Ndhlovu/credit-scoring-pipeline) repository:
+- `credit_model.pkl` – trained classifier
+- `scaler.pkl` – feature scaler
+- `feature_names.pkl` – expected feature names

@@ -1,52 +1,37 @@
-"""FastAPI application for the credit scoring prediction service."""
+from fastapi import FastAPI
+from pydantic import BaseModel
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import JSONResponse
+from src.model import is_model_loaded, load_artifacts
+from src.predict import predict, PredictionInput
 
-from . import model as model_module
-from .predict import CreditApplication, PredictionResult, predict
+# Load artifacts at startup
+load_artifacts()
 
 app = FastAPI(
     title="Credit Scoring API",
-    description="Real-time credit default prediction service.",
+    description="Production ML pipeline for credit default prediction.",
     version="1.0.0",
 )
 
 
-@app.get(
-    "/health",
-    summary="Health check",
-    response_model=dict,
-    responses={200: {"description": "Service is healthy"}},
-)
-def health():
-    """
-    Return the health status of the service and model loading state.
-    """
-    return JSONResponse(
-        content={
-            "status": "ok",
-            "model_loaded": model_module.is_model_loaded(),
-        }
-    )
+class HealthResponse(BaseModel):
+    status: str
+    model_loaded: bool
+
+    model_config = {"protected_namespaces": ()}
 
 
-@app.post(
-    "/predict",
-    summary="Predict credit default risk",
-    response_model=PredictionResult,
-    responses={
-        200: {"description": "Prediction result"},
-        400: {"description": "Invalid input"},
-        500: {"description": "Model or server error"},
-    },
-)
-def predict_endpoint(application: CreditApplication):
+@app.get("/health", response_model=HealthResponse, tags=["health"])
+def health_check() -> HealthResponse:
+    """Check API health and whether the model is loaded."""
+    return HealthResponse(status="ok", model_loaded=is_model_loaded())
+
+
+@app.post("/predict", tags=["predict"])
+def predict_endpoint(input_data: PredictionInput) -> dict:
     """
-    Classify a credit application and return the default probability and risk band.
+    Make a credit default prediction.
+
+    Returns approval decision, default probability, and risk band.
     """
-    try:
-        result = predict(application)
-        return result
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    return predict(input_data)

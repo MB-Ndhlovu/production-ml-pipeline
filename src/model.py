@@ -1,44 +1,43 @@
-"""Model loading utilities for the credit scoring pipeline."""
-
+import os
 import joblib
-from pathlib import Path
 
-MODEL_DIR = Path(__file__).parent.parent / "models"
+MODEL_DIR = os.path.join(os.path.dirname(__file__), "..", "models")
 
-_model = None
+_credit_model = None
 _scaler = None
 _feature_names = None
 
 
 def load_artifacts():
-    """Load all model artifacts from disk."""
-    global _model, _scaler, _feature_names
-    _model = joblib.load(MODEL_DIR / "credit_model.pkl")
-    _scaler = joblib.load(MODEL_DIR / "scaler.pkl")
-    _feature_names = joblib.load(MODEL_DIR / "feature_names.pkl")
+    """Load model artifacts from the models directory."""
+    global _credit_model, _scaler, _feature_names
+    _credit_model = joblib.load(os.path.join(MODEL_DIR, "credit_model.pkl"))
+    _scaler = joblib.load(os.path.join(MODEL_DIR, "scaler.pkl"))
+    _feature_names = joblib.load(os.path.join(MODEL_DIR, "feature_names.pkl"))
+    return _credit_model, _scaler, _feature_names
 
 
 def get_model():
-    """Return the loaded model, loading if necessary."""
-    if _model is None:
+    if _credit_model is None:
         load_artifacts()
-    return _model
+    return _credit_model
 
 
 def get_scaler():
-    """Return the loaded scaler, loading if necessary."""
     if _scaler is None:
         load_artifacts()
     return _scaler
 
 
 def get_feature_names():
-    """Return the loaded feature names, loading if necessary."""
     if _feature_names is None:
         load_artifacts()
     return _feature_names
 
 
 def is_model_loaded():
-    """Check whether all artifacts are loaded."""
-    return _model is not None and _scaler is not None and _feature_names is not None
+    try:
+        get_model()
+        return True
+    except Exception:
+        return False
