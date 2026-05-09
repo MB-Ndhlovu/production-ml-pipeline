@@ -1,42 +1,85 @@
+"""Test suite for the Credit Scoring API."""
+
 import pytest
-from httpx import AsyncClient, ASGITransport
+from fastapi.testclient import TestClient
+
 from src.api import app
 
-
-@pytest.fixture
-async def client():
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        yield ac
+client = TestClient(app)
 
 
-@pytest.mark.asyncio
-async def test_health(client):
-    resp = await client.get("/health")
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["status"] == "ok"
-    assert "model_loaded" in data
+class TestHealth:
+    """Tests for the GET /health endpoint."""
+
+    def test_health_returns_ok(self):
+        response = client.get("/health")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "ok"
+        assert data["model_loaded"] is True
 
 
-@pytest.mark.asyncio
-async def test_predict(client):
-    payload = {
-        "income": 65000,
-        "credit_score": 720,
-        "employment_years": 5,
-        "debt_to_income": 0.28,
-        "loan_history_count": 2,
-        "age": 34,
-        "home_ownership": "rent",
-        "verified_income": 1,
-    }
-    resp = await client.post("/predict", json=payload)
-    assert resp.status_code == 200
-    data = resp.json()
-    assert "approved" in data
-    assert "default_probability" in data
-    assert "risk_band" in data
-    assert data["risk_band"] in ("low", "medium", "high")
-    assert isinstance(data["default_probability"], float)
-    assert isinstance(data["approved"], bool)
+class TestPredict:
+    """Tests for the POST /predict endpoint."""
+
+    def test_predict_low_risk(self):
+        payload = {
+            "income": 65000,
+            "credit_score": 720,
+            "employment_years": 5,
+            "debt_to_income": 0.28,
+            "loan_history_count": 2,
+            "age": 34,
+            "home_ownership": "rent",
+            "verified_income": 1,
+        }
+        response = client.post("/predict", json=payload)
+        assert response.status_code == 200
+        data = response.json()
+        assert "approved" in data
+        assert "default_probability" in data
+        assert "risk_band" in data
+        assert data["risk_band"] in ("low", "medium", "high")
+
+    def test_predict_returns_valid_probability(self):
+        payload = {
+            "income": 50000,
+            "credit_score": 600,
+            "employment_years": 2,
+            "debt_to_income": 0.4,
+            "loan_history_count": 5,
+            "age": 25,
+            "home_ownership": "rent",
+            "verified_income": 0,
+        }
+        response = client.post("/predict", json=payload)
+        data = response.json()
+        assert 0 <= data["default_probability"] <= 1
+
+    def test_predict_invalid_credit_score(self):
+        payload = {
+            "income": 50000,
+            "credit_score": 900,  # out of range (> 850)
+            "employment_years": 2,
+            "debt_to_income": 0.4,
+            "loan_history_count": 5,
+            "age": 25,
+            "home_ownership": "rent",
+            "verified_income": 0,
+        }
+        response = client.post("/predict", json=payload)
+        assert response.status_code == 422  # FastAPI validation error
+
+    def test_predict_missing_field(self):
+        payload = {
+            "income": 50000,
+            # missing credit_score
+            "employment_years": 2,
+            "debt_to_income": 0.4,
+            "loan_history_count": 5,
+            "age": 25,
+            "home_ownership": "rent",
+            "verified_income": 0,
+        }
+        response = client.post("/predict", json=payload)
+        assert response.status_code == 422

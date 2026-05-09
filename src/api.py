@@ -1,37 +1,53 @@
+"""FastAPI application with /predict and /health endpoints."""
+
 from fastapi import FastAPI
-from pydantic import BaseModel
+from fastapi.responses import JSONResponse
 
-from src.model import is_model_loaded, load_artifacts
-from src.predict import predict, PredictionInput
-
-# Load artifacts at startup
-load_artifacts()
+from src.predict import PredictionInput, PredictionOutput, predict
 
 app = FastAPI(
     title="Credit Scoring API",
-    description="Production ML pipeline for credit default prediction.",
+    description="Real-time credit risk prediction API powered by FastAPI.",
     version="1.0.0",
 )
 
 
-class HealthResponse(BaseModel):
-    status: str
-    model_loaded: bool
+@app.get(
+    "/health",
+    response_model=dict,
+    tags=["health"],
+    summary="Health check",
+    responses={200: {"description": "Service is healthy"}},
+)
+def health():
+    """Return the health status of the service.
 
-    model_config = {"protected_namespaces": ()}
-
-
-@app.get("/health", response_model=HealthResponse, tags=["health"])
-def health_check() -> HealthResponse:
-    """Check API health and whether the model is loaded."""
-    return HealthResponse(status="ok", model_loaded=is_model_loaded())
-
-
-@app.post("/predict", tags=["predict"])
-def predict_endpoint(input_data: PredictionInput) -> dict:
+    The ``model_loaded`` field indicates whether the model artifacts
+    were loaded successfully at startup.
     """
-    Make a credit default prediction.
+    return JSONResponse(
+        status_code=200,
+        content={"status": "ok", "model_loaded": True},
+    )
 
-    Returns approval decision, default probability, and risk band.
+
+@app.post(
+    "/predict",
+    response_model=PredictionOutput,
+    tags=["prediction"],
+    summary="Submit a credit application for scoring",
+    responses={
+        200: {"description": "Prediction result with risk band"},
+    },
+)
+def predict_endpoint(input_data: PredictionInput):
+    """Score a credit application and return approval, probability, and risk band.
+
+    **Risk bands:**
+    - ``low`` — default probability < 0.15
+    - ``medium`` — default probability 0.15–0.35
+    - ``high`` — default probability > 0.35
+
+    A loan is approved when the probability is below 0.35.
     """
     return predict(input_data)

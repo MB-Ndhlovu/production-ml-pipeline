@@ -1,28 +1,21 @@
-# Production ML Pipeline with FastAPI
+# Production ML Pipeline — Credit Scoring API
 
-A production-ready credit scoring prediction API built with FastAPI.
+FastAPI-powered REST API for real-time and batch credit risk predictions.
 
 ## Overview
 
-This project exposes a trained credit scoring model via a REST API with health checks, individual predictions, and batch processing support.
+Loads a trained credit scoring model (`credit_model.pkl`) with its scaler and feature names from `models/`. Exposes two endpoints:
 
-## API Endpoints
+- `POST /predict` — single prediction with probability and risk band
+- `GET /health` — service health check
 
-### `GET /health`
-Health check endpoint.
+## API Docs
 
-**Response:**
-```json
-{
-  "status": "ok",
-  "model_loaded": true
-}
-```
+Once the server is running, visit `http://localhost:8000/docs` for the interactive Swagger UI.
 
-### `POST /predict`
-Make a credit default prediction.
+### POST /predict
 
-**Request Body:**
+**Request body:**
 ```json
 {
   "income": 65000,
@@ -45,48 +38,62 @@ Make a credit default prediction.
 }
 ```
 
-**Risk Bands:**
-- `low`: probability < 0.15
-- `medium`: probability 0.15 – 0.35
-- `high`: probability > 0.35
+Risk bands:
+- `low` — probability < 0.15
+- `medium` — probability 0.15 – 0.35
+- `high` — probability > 0.35
 
-**Approval Rule:** `approved = true` if probability < 0.35.
+### GET /health
 
-## Installation
-
-```bash
-pip install -r requirements.txt
+**Response:**
+```json
+{
+  "status": "ok",
+  "model_loaded": true
+}
 ```
 
 ## Local Development
 
 ```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Run the server
 python run_api.py
 ```
 
-The server starts at `http://localhost:8000`. API docs are available at `http://localhost:8000/docs`.
-
-## Running Tests
+## Run Tests
 
 ```bash
 pytest tests/ -v
 ```
 
-## Batch Prediction
-
-```bash
-python src/batch.py --url http://localhost:8000 --input data.csv --output predictions.csv
-```
-
 ## Deployment
 
-1. Set environment variables for any secrets.
-2. Run with uvicorn: `uvicorn src.api:app --host 0.0.0.0 --port $PORT`
-3. For production, use gunicorn with uvicorn workers.
+```bash
+# Production server (uvicorn)
+uvicorn src.api:app --host 0.0.0.0 --port 8000
+```
 
-## Model Artifacts
+## Project Structure
 
-Model artifacts are downloaded from the [credit-scoring-pipeline](https://github.com/MB-Ndhlovu/credit-scoring-pipeline) repository:
-- `credit_model.pkl` – trained classifier
-- `scaler.pkl` – feature scaler
-- `feature_names.pkl` – expected feature names
+```
+production-ml-pipeline/
+├── README.md
+├── requirements.txt
+├── run_api.py
+├── models/
+│   ├── credit_model.pkl
+│   ├── scaler.pkl
+│   └── feature_names.pkl
+├── src/
+│   ├── __init__.py
+│   ├── model.py       # artifact loading
+│   ├── predict.py     # Pydantic schemas + prediction logic
+│   ├── api.py         # FastAPI app
+│   └── batch.py       # batch prediction script
+└── tests/
+    ├── __init__.py
+    └── test_api.py
+```
