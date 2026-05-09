@@ -1,21 +1,30 @@
-# Production ML Pipeline — Credit Scoring API
+# Production ML Pipeline with FastAPI
 
-FastAPI-powered REST API for real-time and batch credit risk predictions.
+A production-ready credit scoring prediction API built with FastAPI.
 
 ## Overview
 
-Loads a trained credit scoring model (`credit_model.pkl`) with its scaler and feature names from `models/`. Exposes two endpoints:
+This project exposes a trained credit scoring model via a REST API with health checking, single predictions, and batch prediction support.
 
-- `POST /predict` — single prediction with probability and risk band
-- `GET /health` — service health check
+## API Documentation
 
-## API Docs
+### `GET /health`
 
-Once the server is running, visit `http://localhost:8000/docs` for the interactive Swagger UI.
+Health check endpoint.
 
-### POST /predict
+**Response:**
+```json
+{
+  "status": "ok",
+  "model_loaded": true
+}
+```
 
-**Request body:**
+### `POST /predict`
+
+Predict credit approval and default probability.
+
+**Request Body:**
 ```json
 {
   "income": 65000,
@@ -38,42 +47,38 @@ Once the server is running, visit `http://localhost:8000/docs` for the interacti
 }
 ```
 
-Risk bands:
-- `low` — probability < 0.15
-- `medium` — probability 0.15 – 0.35
-- `high` — probability > 0.35
+**Risk Bands:**
+- `low`: probability < 0.15
+- `medium`: probability 0.15 – 0.35
+- `high`: probability > 0.35
 
-### GET /health
-
-**Response:**
-```json
-{
-  "status": "ok",
-  "model_loaded": true
-}
-```
-
-## Local Development
+## Running Locally
 
 ```bash
-# Install dependencies
 pip install -r requirements.txt
-
-# Run the server
 python run_api.py
 ```
 
-## Run Tests
+API available at `http://localhost:8000`. Docs at `http://localhost:8000/docs`.
+
+## Running Tests
 
 ```bash
-pytest tests/ -v
+pip install -r requirements.txt pytest httpx
+pytest tests/
 ```
 
 ## Deployment
 
 ```bash
-# Production server (uvicorn)
+pip install -r requirements.txt
 uvicorn src.api:app --host 0.0.0.0 --port 8000
+```
+
+Or use the production runner:
+
+```bash
+python run_api.py
 ```
 
 ## Project Structure
@@ -83,16 +88,13 @@ production-ml-pipeline/
 ├── README.md
 ├── requirements.txt
 ├── run_api.py
-├── models/
-│   ├── credit_model.pkl
-│   ├── scaler.pkl
-│   └── feature_names.pkl
+├── models/               # Model artifacts (downloaded on first run)
 ├── src/
 │   ├── __init__.py
-│   ├── model.py       # artifact loading
-│   ├── predict.py     # Pydantic schemas + prediction logic
-│   ├── api.py         # FastAPI app
-│   └── batch.py       # batch prediction script
+│   ├── api.py            # FastAPI app
+│   ├── model.py          # Model loading
+│   ├── predict.py        # Pydantic schemas & prediction logic
+│   └── batch.py          # Batch prediction script
 └── tests/
     ├── __init__.py
     └── test_api.py
