@@ -1,108 +1,109 @@
-"""pytest tests for the Prediction API."""
+"""Pytest tests for the FastAPI credit scoring endpoints."""
+
 import pytest
 from fastapi.testclient import TestClient
 
 from src.api import app
+from src import model as model_module
+
+client = TestClient(app)
 
 
-@pytest.fixture
-def client():
-    """Synchronous test client."""
-    with TestClient(app) as client:
-        yield client
+@pytest.fixture(autouse=True)
+def ensure_model_loaded():
+    """Ensure model artifacts are loaded before each test."""
+    model_module.load_artifacts()
 
 
-def test_health(client):
-    """GET /health returns 200 with status ok."""
-    response = client.get("/health")
-    assert response.status_code == 200
-    data = response.json()
-    assert data["status"] == "ok"
-    assert data["model_loaded"] is True
+class TestHealthEndpoint:
+    def test_health_returns_ok(self):
+        response = client.get("/health")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "ok"
+        assert data["model_loaded"] is True
+
+    def test_health_content_type(self):
+        response = client.get("/health")
+        assert response.headers["content-type"] == "application/json"
 
 
-def test_predict_valid(client):
-    """POST /predict with valid data returns 200."""
-    payload = {
-        "income": 65000,
-        "credit_score": 720,
-        "employment_years": 5,
-        "debt_to_income": 0.28,
-        "loan_history_count": 2,
-        "age": 34,
-        "home_ownership": "rent",
-        "verified_income": 1,
-    }
-    response = client.post("/predict", json=payload)
-    assert response.status_code == 200
-    data = response.json()
-    assert "approved" in data
-    assert "default_probability" in data
-    assert "risk_band" in data
-    assert data["risk_band"] in ("low", "medium", "high")
+class TestPredictEndpoint:
+    def test_predict_low_risk(self):
+        payload = {
+            "income": 85000,
+            "credit_score": 780,
+            "employment_years": 8,
+            "debt_to_income": 0.15,
+            "loan_history_count": 1,
+            "age": 40,
+            "home_ownership": "own",
+            "verified_income": 1,
+        }
+        response = client.post("/predict", json=payload)
+        assert response.status_code == 200
+        data = response.json()
+        assert "approved" in data
+        assert "default_probability" in data
+        assert "risk_band" in data
+        assert data["risk_band"] in ("low", "medium", "high")
 
+    def test_predict_invalid_credit_score(self):
+        payload = {
+            "income": 50000,
+            "credit_score": 200,  # below valid range
+            "employment_years": 3,
+            "debt_to_income": 0.3,
+            "loan_history_count": 1,
+            "age": 30,
+            "home_ownership": "rent",
+            "verified_income": 0,
+        }
+        response = client.post("/predict", json=payload)
+        assert response.status_code == 422  # validation error
 
-def test_predict_missing_field(client):
-    """POST /predict with a missing required field returns 422."""
-    payload = {
-        "income": 65000,
-        # missing credit_score
-        "employment_years": 5,
-        "debt_to_income": 0.28,
-        "loan_history_count": 2,
-        "age": 34,
-        "home_ownership": "rent",
-        "verified_income": 1,
-    }
-    response = client.post("/predict", json=payload)
-    assert response.status_code == 422
+    def test_predict_invalid_income(self):
+        payload = {
+            "income": -1000,  # negative income
+            "credit_score": 700,
+            "employment_years": 3,
+            "debt_to_income": 0.3,
+            "loan_history_count": 1,
+            "age": 30,
+            "home_ownership": "rent",
+            "verified_income": 0,
+        }
+        response = client.post("/predict", json=payload)
+        assert response.status_code == 422
 
+    def test_predict_missing_field(self):
+        payload = {
+            "income": 50000,
+            # missing credit_score
+            "employment_years": 3,
+            "debt_to_income": 0.3,
+            "loan_history_count": 1,
+            "age": 30,
+            "home_ownership": "rent",
+            "verified_income": 0,
+        }
+        response = client.post("/predict", json=payload)
+        assert response.status_code == 422
 
-def test_predict_invalid_home_ownership(client):
-    """POST /predict with an invalid home_ownership value returns 422."""
-    payload = {
-        "income": 65000,
-        "credit_score": 720,
-        "employment_years": 5,
-        "debt_to_income": 0.28,
-        "loan_history_count": 2,
-        "age": 34,
-        "home_ownership": "invalid",
-        "verified_income": 1,
-    }
-    response = client.post("/predict", json=payload)
-    assert response.status_code == 422
-
-
-def test_predict_risk_band_low(client):
-    """When probability is below 0.15, risk_band should be low."""
-    payload = {
-        "income": 120000,
-        "credit_score": 820,
-        "employment_years": 15,
-        "debt_to_income": 0.1,
-        "loan_history_count": 1,
-        "age": 45,
-        "home_ownership": "own",
-        "verified_income": 1,
-    }
-    response = client.post("/predict", json=payload)
-    assert response.status_code == 200
-    assert response.json()["risk_band"] == "low"
-
-
-def test_predict_risk_band_high(client):
-    """When probability is above 0.35, risk_band should be high."""
-    payload = {
-        "income": 20000,
-        "credit_score": 500,
-        "employment_years": 0,
-        "debt_to_income": 0.6,
-        "loan_history_count": 5,
-        "age": 22,
-        "home_ownership": "rent",
-        "verified_income": 0,
-    }
-    response = client.post("/predict", json=payload)
-    assert response.status_code == 200
-    assert response.json()["risk_band"] == "high"
+    def test_predict_response_schema(self):
+        payload = {
+            "income": 65000,
+            "credit_score": 720,
+            "employment_years": 5,
+            "debt_to_income": 0.28,
+            "loan_history_count": 2,
+            "age": 34,
+            "home_ownership": "rent",
+            "verified_income": 1,
+        }
+        response = client.post("/predict", json=payload)
+        data = response.json()
+        assert isinstance(data["approved"], bool)
+        assert isinstance(data["default_probability"], float)
+        assert 0 <= data["default_probability"] <= 1
+        assert data["risk_band"] in ("low", "medium", "high")

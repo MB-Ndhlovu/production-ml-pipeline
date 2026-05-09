@@ -1,65 +1,52 @@
-"""FastAPI application with /predict and /health endpoints."""
-from contextlib import asynccontextmanager
+"""FastAPI application for the credit scoring prediction service."""
 
-from fastapi import FastAPI, status
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 
-from src.model import load_artifacts
-from src.predict import PredictRequest, PredictResponse, predict
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Load model artifacts on startup; clean up on shutdown."""
-    load_artifacts()
-    yield
-
+from . import model as model_module
+from .predict import CreditApplication, PredictionResult, predict
 
 app = FastAPI(
-    title="Credit Default Prediction API",
-    description="Production ML pipeline for credit default prediction. "
-                "Provides single-record prediction with probability and risk band.",
+    title="Credit Scoring API",
+    description="Real-time credit default prediction service.",
     version="1.0.0",
-    lifespan=lifespan,
 )
 
 
 @app.get(
     "/health",
-    tags=["Health"],
     summary="Health check",
+    response_model=dict,
     responses={200: {"description": "Service is healthy"}},
 )
-async def health():
+def health():
     """
-    Returns the service health status and whether the model was loaded.
-
-    Use this endpoint for load-balancer health probes.
+    Return the health status of the service and model loading state.
     """
     return JSONResponse(
-        status_code=status.HTTP_200_OK,
-        content={"status": "ok", "model_loaded": True},
+        content={
+            "status": "ok",
+            "model_loaded": model_module.is_model_loaded(),
+        }
     )
 
 
 @app.post(
     "/predict",
-    response_model=PredictResponse,
-    tags=["Prediction"],
-    summary="Predict credit default",
+    summary="Predict credit default risk",
+    response_model=PredictionResult,
     responses={
         200: {"description": "Prediction result"},
-        422: {"description": "Validation error"},
+        400: {"description": "Invalid input"},
+        500: {"description": "Model or server error"},
     },
 )
-async def predict_endpoint(request: PredictRequest):
+def predict_endpoint(application: CreditApplication):
     """
-    Accept applicant features and return a credit default prediction.
-
-    The response includes:
-
-    - **approved**: whether the application passes the risk threshold
-    - **default_probability**: model's probability estimate (0-1)
-    - **risk_band**: one of ``low`` (< 0.15), ``medium`` (0.15-0.35), ``high`` (> 0.35)
+    Classify a credit application and return the default probability and risk band.
     """
-    return predict(request)
+    try:
+        result = predict(application)
+        return result
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc

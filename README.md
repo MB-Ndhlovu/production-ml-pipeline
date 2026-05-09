@@ -1,42 +1,55 @@
 # Production ML Pipeline
 
-A FastAPI-based REST API for credit default prediction, exposing a single `/predict` endpoint and a health check.
+A FastAPI-based microservice for real-time credit default prediction.
+
+## Overview
+
+This service loads a pre-trained credit scoring model and provides a REST API for predicting default probability and risk classification.
 
 ## Features
 
-- **REST API** via FastAPI + Uvicorn
-- **Single-record prediction** with probability and risk band
-- **Batch prediction** via a companion script
-- **Health check** endpoint for load-balancer probes
-- **OpenAPI documentation** at `/docs`
+- Real-time single-prediction endpoint
+- Batch prediction support
+- Health check endpoint
+- OpenAPI documentation
 
-## Model Artifacts
+## Installation
 
-The pipeline expects three pickled artifacts inside `models/`:
-
-| File | Description |
-|------|-------------|
-| `credit_model.pkl` | Trained classifier (scikit-learn estimator) |
-| `scaler.pkl` | Fitted `StandardScaler` (or equivalent) |
-| `feature_names.pkl` | List of feature column names in expected order |
-
-These are downloaded from the
-[credit-scoring-pipeline](https://github.com/MB-Ndhlovu/credit-scoring-pipeline) repository.
-Replace them with your own trained artifacts as needed.
-
-## API
-
-### `GET /health`
-
-Returns the service health status.
-
-```json
-{ "status": "ok", "model_loaded": true }
+```bash
+pip install -r requirements.txt
 ```
 
-### `POST /predict`
+## Running the API
 
-**Request body**
+```bash
+python run_api.py
+```
+
+The server starts on `http://localhost:8000`.
+
+## API Endpoints
+
+### GET /health
+
+Health check. Returns model loading status.
+
+```bash
+curl http://localhost:8000/health
+```
+
+Response:
+```json
+{
+  "status": "ok",
+  "model_loaded": true
+}
+```
+
+### POST /predict
+
+Predict credit default risk.
+
+**Request body:**
 
 ```json
 {
@@ -51,18 +64,7 @@ Returns the service health status.
 }
 ```
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `income` | float | Annual income |
-| `credit_score` | int | Credit score (300–850 typical) |
-| `employment_years` | float | Years employed |
-| `debt_to_income` | float | Debt-to-income ratio (0–1) |
-| `loan_history_count` | int | Number of past loans |
-| `age` | int | Applicant age |
-| `home_ownership` | string | One of `"rent"`, `"own"`, `"mortgage"`, `"other"` |
-| `verified_income` | int | 1 if income is verified, 0 otherwise |
-
-**Response**
+**Response:**
 
 ```json
 {
@@ -72,64 +74,54 @@ Returns the service health status.
 }
 ```
 
-**Risk bands**
+**Risk bands:**
+- `low`: probability < 0.15
+- `medium`: probability 0.15–0.35
+- `high`: probability > 0.35
 
-| Band | Probability range |
-|------|--------------------|
-| `low` | < 0.15 |
-| `medium` | 0.15 – 0.35 |
-| `high` | > 0.35 |
-
-## Development
+## Testing
 
 ```bash
-# Install dependencies
-pip install -r requirements.txt
-
-# Run the API locally
-python run_api.py
-# API available at http://localhost:8000
-# Docs at http://localhost:8000/docs
-
-# Run tests
 pytest tests/ -v
 ```
 
 ## Deployment
 
-The API is a standard FastAPI + Uvicorn application. To deploy:
+### Local Production
 
 ```bash
-# Example with gunicorn + uvicorn workers
-gunicorn src.api:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
+uvicorn src.api:app --host 0.0.0.0 --port 8000
 ```
 
-Or containerise with Docker:
+### Docker
 
 ```dockerfile
 FROM python:3.11-slim
-WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-COPY . .
-CMD ["python", "run_api.py"]
+COPY . /app
+WORKDIR /app
+CMD ["uvicorn", "src.api:app", "--host", "0.0.0.0", "--port", "8000"]
 ```
 
 ## Project Structure
 
 ```
 production-ml-pipeline/
-├── models/              # Serialised model artefacts
+├── README.md
+├── requirements.txt
+├── run_api.py
+├── models/
+│   ├── credit_model.pkl
+│   ├── scaler.pkl
+│   └── feature_names.pkl
 ├── src/
 │   ├── __init__.py
-│   ├── api.py           # FastAPI app definition
-│   ├── model.py         # Model loading utilities
-│   ├── predict.py       # Pydantic schemas + prediction logic
-│   └── batch.py         # Batch prediction script
-├── tests/
-│   ├── __init__.py
-│   └── test_api.py      # pytest API tests
-├── run_api.py           # Local dev entry point
-├── requirements.txt
-└── README.md
+│   ├── api.py
+│   ├── model.py
+│   ├── predict.py
+│   └── batch.py
+└── tests/
+    ├── __init__.py
+    └── test_api.py
 ```

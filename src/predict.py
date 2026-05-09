@@ -1,29 +1,32 @@
-"""Pydantic schemas and prediction logic."""
+"""Prediction logic and Pydantic schemas for the credit scoring API."""
+
 from enum import Enum
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from src.model import get_model, get_scaler, get_feature_names
+from . import model as model_module
 
 
-class HomeOwnership(str, Enum):
-    rent = "rent"
-    own = "own"
-    mortgage = "mortgage"
-    other = "other"
+class RiskBand(str, Enum):
+    """Risk classification bands based on default probability."""
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
 
 
-class PredictRequest(BaseModel):
-    """Input features for a single credit prediction."""
-
-    income: float = Field(..., description="Annual income")
-    credit_score: int = Field(..., description="Credit score (300-850)")
-    employment_years: float = Field(..., description="Years employed")
-    debt_to_income: float = Field(..., ge=0, le=1, description="Debt-to-income ratio")
+class CreditApplication(BaseModel):
+    """Schema for a credit application prediction request."""
+    income: float = Field(..., gt=0, description="Annual income")
+    credit_score: int = Field(..., ge=300, le=850, description="Credit score (300-850)")
+    employment_years: int = Field(..., ge=0, description="Years in current employment")
+    debt_to_income: float = Field(..., ge=0, le=1, description="Debt-to-income ratio (0-1)")
     loan_history_count: int = Field(..., ge=0, description="Number of past loans")
-    age: int = Field(..., ge=18, description="Applicant age")
-    home_ownership: HomeOwnership = Field(..., description="Home ownership status")
-    verified_income: int = Field(..., ge=0, le=1, description="1 if income verified, 0 otherwise")
+    age: int = Field(..., ge=18, le=120, description="Applicant age")
+    home_ownership: Literal["rent", "own", "mortgage"] = Field(
+        ..., description="Home ownership status"
+    )
+    verified_income: int = Field(..., ge=0, le=1, description="Income verified (0 or 1)")
 
     model_config = {
         "json_schema_extra": {
@@ -41,79 +44,81 @@ class PredictRequest(BaseModel):
     }
 
 
-class PredictResponse(BaseModel):
-    """Prediction result."""
-
+class PredictionResult(BaseModel):
+    """Schema for a credit prediction response."""
     approved: bool = Field(..., description="Whether the application is approved")
-    default_probability: float = Field(..., description="Predicted probability of default")
-    risk_band: str = Field(..., description="Risk band: low, medium, or high")
-
-    model_config = {
-        "json_schema_extra": {
-            "example": {
-                "approved": True,
-                "default_probability": 0.12,
-                "risk_band": "low",
-            }
-        }
-    }
+    default_probability: float = Field(..., ge=0, le=1, description="Predicted default probability")
+    risk_band: RiskBand = Field(..., description="Risk classification band")
 
 
-def get_risk_band(probability: float) -> str:
-    """Determine risk band from default probability."""
+def classify_risk(probability: float) -> RiskBand:
+    """Classify a default probability into a risk band."""
     if probability < 0.15:
-        return "low"
+        return RiskBand.LOW
     elif probability <= 0.35:
-        return "medium"
+        return RiskBand.MEDIUM
     else:
-        return "high"
+        return RiskBand.HIGH
 
 
-def predict(request: PredictRequest) -> PredictResponse:
+def predict(application: CreditApplication) -> PredictionResult:
     """
-    Run a credit default prediction from a validated request.
+    Run a credit default prediction for a single application.
 
-    Returns a ``PredictResponse`` with approval flag, probability,
-    and risk band.
+    Parameters
+    ----------
+    application : CreditApplication
+        Validated application features.
+
+    Returns
+    -------
+    PredictionResult
+        Prediction with approval decision, probability, and risk band.
     """
-    model = get_model()
-    scaler = get_scaler()
-    feature_names = get_feature_names()
+    mdl = model_module.get_model()
+    scaler = model_module.get_scaler()
+    feature_names = model_module.get_feature_names()
 
-    # Build feature vector in the exact order expected by the model.
-    # Defaults are used for features not exposed in the API.
-    raw_features = {
-        "credit_score": request.credit_score,
-        "annual_income": request.income,
-        "debt_to_income": request.debt_to_income,
-        "employment_years": request.employment_years,
-        "loan_amount": 10000.0,          # default
-        "interest_rate": 0.15,            # default 15%
-        "verified_income": request.verified_income,
-        "num_credit_lines": request.loan_history_count,
-        "delinquency_2yrs": 0,            # default
-        "loan_purpose_business": 0,
-        "loan_purpose_debt_consolidation": 0,
-        "loan_purpose_home_improvement": 0,
-        "loan_purpose_major_purchase": 0,
-        "loan_purpose_other": 1,          # default to 'other'
-        "home_ownership_MORTGAGE": 0,
-        "home_ownership_OTHER": 0,
-        "home_ownership_OWN": 0,
-        "home_ownership_RENT": 0,
-    }
+    # Build a full 18-feature vector matching the training schema.
+    # Feature order from feature_names.pkl:
+    # ['credit_score', 'annual_income', 'debt_to_income', 'employment_years',
+    #  'loan_amount', 'interest_rate', 'verified_income', 'num_credit_lines',
+    #  'delinquency_2yrs', 'loan_purpose_business', 'loan_purpose_debt_consolidation',
+    #  'loan_purpose_home_improvement', 'loan_purpose_major_purchase',
+    #  'loan_purpose_other', 'home_ownership_MORTGAGE', 'home_ownership_OTHER',
+    #  'home_ownership_OWN', 'home_ownership_RENT']
+    home_upper = application.home_ownership.upper()
 
-    ho = request.home_ownership.value.upper()
-    raw_features[f"home_ownership_{ho}"] = 1
+    raw_features = [
+        application.credit_score,       # credit_score
+        application.income,              # annual_income
+        application.debt_to_income,      # debt_to_income
+        application.employment_years,    # employment_years
+        0.0,                            # loan_amount (not in API schema — default)
+        0.0,                            # interest_rate (not in API schema — default)
+        application.verified_income,     # verified_income
+        application.loan_history_count, # num_credit_lines
+        0,                              # delinquency_2yrs (no data in API schema)
+        0,                              # loan_purpose_business
+        0,                              # loan_purpose_debt_consolidation
+        0,                              # loan_purpose_home_improvement
+        0,                              # loan_purpose_major_purchase
+        1 if application.home_ownership == "other" else 0,  # loan_purpose_other
+        1 if home_upper == "MORTGAGE" else 0,  # home_ownership_MORTGAGE
+        1 if application.home_ownership == "other" else 0,   # home_ownership_OTHER
+        1 if home_upper == "OWN" else 0,       # home_ownership_OWN
+        1 if home_upper == "RENT" else 0,      # home_ownership_RENT
+    ]
 
-    feature_vector = [raw_features[name] for name in feature_names]
+    feature_vector = scaler.transform([raw_features])
 
-    X = scaler.transform([feature_vector])
-    probability = float(model.predict_proba(X)[0, 1])
+    probability = float(mdl.predict_proba(feature_vector)[0, 1])
+
+    risk_band = classify_risk(probability)
     approved = probability < 0.35
 
-    return PredictResponse(
+    return PredictionResult(
         approved=approved,
         default_probability=round(probability, 4),
-        risk_band=get_risk_band(probability),
+        risk_band=risk_band,
     )
