@@ -1,42 +1,42 @@
-"""Batch prediction script — hits the /predict API for each applicant in a CSV."""
+"""Batch prediction script — calls the /predict endpoint for each record in a CSV."""
 
 import argparse
+import csv
 import json
+import sys
+from pathlib import Path
+
 import httpx
-import pandas as pd
 
 
-def score_batch(csv_path: str, base_url: str = "http://localhost:8000") -> pd.DataFrame:
-    """
-    Read a CSV of credit applications and score each via the API.
+def run_batch(csv_path: str, base_url: str = "http://localhost:8000"):
+    """Read records from a CSV and print predictions."""
+    with open(csv_path, newline="") as f:
+        reader = csv.DictReader(f)
+        records = list(reader)
 
-    The CSV must have columns matching the CreditApplication schema:
-    income, credit_score, employment_years, debt_to_income, loan_history_count,
-    age, home_ownership, verified_income
-    """
-    df = pd.read_csv(csv_path)
-    results = []
-
-    with httpx.Client(timeout=30.0) as client:
-        for _, row in df.iterrows():
-            payload = row.to_dict()
-            resp = client.post(f"{base_url}/predict", json=payload)
-            resp.raise_for_status()
-            results.append(resp.json())
-
-    return pd.DataFrame(results)
+    with httpx.Client(base_url=base_url, timeout=30.0) as client:
+        for i, row in enumerate(records, 1):
+            try:
+                response = client.post("/predict", json=row)
+                response.raise_for_status()
+                result = response.json()
+                print(f"Row {i}: {json.dumps(result)}")
+            except Exception as exc:
+                print(f"Row {i}: ERROR — {exc}", file=sys.stderr)
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Batch-score credit applications via API")
-    parser.add_argument("csv", help="Path to input CSV")
+    parser = argparse.ArgumentParser(description="Batch prediction via credit scoring API")
+    parser.add_argument("csv", help="Path to CSV file with applicant records")
     parser.add_argument("--url", default="http://localhost:8000", help="API base URL")
-    parser.add_argument("--output", default="predictions.csv", help="Output CSV path")
     args = parser.parse_args()
 
-    df = score_batch(args.csv, base_url=args.url)
-    df.to_csv(args.output, index=False)
-    print(f"Saved {len(df)} predictions to {args.output}")
+    if not Path(args.csv).exists():
+        print(f"File not found: {args.csv}", file=sys.stderr)
+        sys.exit(1)
+
+    run_batch(args.csv, args.url)
 
 
 if __name__ == "__main__":

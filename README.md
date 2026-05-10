@@ -1,22 +1,32 @@
-# Production ML Pipeline with FastAPI
+# Production ML Pipeline — Credit Scoring API
 
-A production-ready credit scoring API built with FastAPI, exposing a trained model for real-time predictions and batch processing.
+FastAPI-powered REST API for real-time and batch credit default prediction.
 
-## Features
+## Overview
 
-- **Real-time predictions** via REST API
-- **Health check endpoint** for monitoring
-- **Batch prediction script** for bulk scoring
-- **Pydantic validation** for request/response schemas
-- **OpenAPI documentation** auto-generated
+Loads a pre-trained credit scoring model and scaler from the `credit-scoring-pipeline` repo, then exposes:
+- Single-prediction endpoint (`POST /predict`)
+- Health check endpoint (`GET /health`)
 
-## API Endpoints
+## API Docs
+
+### `GET /health`
+
+Returns API and model status.
+
+**Response**
+```json
+{
+  "status": "ok",
+  "model_loaded": true
+}
+```
 
 ### `POST /predict`
 
-Submit credit application features for scoring.
+Predicts credit default probability for an applicant.
 
-**Request Body:**
+**Request body**
 ```json
 {
   "income": 65000,
@@ -30,7 +40,7 @@ Submit credit application features for scoring.
 }
 ```
 
-**Response:**
+**Response**
 ```json
 {
   "approved": true,
@@ -39,70 +49,43 @@ Submit credit application features for scoring.
 }
 ```
 
-### `GET /health`
-
-Returns API health status and model load state.
-
-**Response:**
-```json
-{
-  "status": "ok",
-  "model_loaded": true
-}
-```
-
-## Risk Bands
-
-| Band | Probability Range |
-|------|-------------------|
-| Low | < 0.15 |
-| Medium | 0.15 – 0.35 |
-| High | > 0.35 |
+**Risk bands**
+| Band   | Probability range |
+|--------|-------------------|
+| `low`   | `< 0.15`          |
+| `medium`| `0.15 – 0.35`    |
+| `high`  | `> 0.35`          |
 
 ## Local Development
-
-```bash
-pip install -r requirements.txt
-python run_api.py
-```
-
-API available at `http://localhost:8000`
-Docs at `http://localhost:8000/docs`
-
-## Run Tests
-
-```bash
-pytest tests/
-```
-
-## Deployment
 
 ```bash
 # Install dependencies
 pip install -r requirements.txt
 
-# Run with gunicorn for production
-gunicorn -w 4 -k uvicorn.workers.UvicornWorker src.api:app
+# Download model artifacts (auto-downloaded on first run)
+# Artifacts sourced from: https://github.com/MB-Ndhlovu/credit-scoring-pipeline
+
+# Run the server
+python run_api.py
 ```
 
-## Project Structure
+## Testing
 
+```bash
+pytest tests/ -v
 ```
-production-ml-pipeline/
-├── README.md
-├── requirements.txt
-├── run_api.py
-├── models/              # Model artifacts
-│   ├── credit_model.pkl
-│   ├── scaler.pkl
-│   └── feature_names.pkl
-├── src/
-│   ├── __init__.py
-│   ├── model.py        # Artifact loading
-│   ├── predict.py      # Prediction logic + schemas
-│   ├── api.py          # FastAPI app
-│   └── batch.py        # Batch prediction script
-└── tests/
-    ├── __init__.py
-    └── test_api.py
+
+## Deployment
+
+Any platform that supports Python + Uvicorn (Render, Railway, Fly.io, Docker):
+
+```bash
+# Dockerfile example
+FROM python:3.11-slim
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY . .
+EXPOSE 8000
+CMD ["uvicorn", "src.api:app", "--host", "0.0.0.0", "--port", "8000"]
 ```

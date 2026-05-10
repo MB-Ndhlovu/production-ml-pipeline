@@ -1,68 +1,72 @@
-"""FastAPI application for credit scoring predictions."""
+"""FastAPI application for the credit scoring ML pipeline."""
 
-from fastapi import FastAPI
-from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 
-from src.model import load_model, load_scaler, load_feature_names
-from src.predict import (
-    CreditApplication,
-    PredictionResponse,
-    get_risk_band,
-    predict_default_probability,
-)
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import JSONResponse
 
-
-model = None
-scaler = None
-feature_names = None
-model_loaded = False
+from src.model import is_model_loaded
+from src.predict import PredictInput, PredictOutput, predict
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Load model artifacts on startup."""
-    global model, scaler, feature_names, model_loaded
-    model = load_model()
-    scaler = load_scaler()
-    feature_names = load_feature_names()
-    model_loaded = True
+    """Validate model loading on startup."""
+    if not is_model_loaded():
+        raise RuntimeError("Failed to load model artifacts on startup")
     yield
-    model_loaded = False
 
 
 app = FastAPI(
     title="Credit Scoring API",
-    description="Production ML pipeline for real-time credit default predictions",
+    description="Production ML pipeline for real-time credit default prediction.",
     version="1.0.0",
     lifespan=lifespan,
 )
 
 
-@app.get("/health", response_model_exclude_none=True)
-async def health_check():
+@app.get(
+    "/health",
+    summary="Health check",
+    response_model=dict,
+    tags=["health"],
+)
+async def health():
     """
-    Health check endpoint.
+    Return API health status and whether the model is loaded.
 
-    Returns the API status and whether the model artifacts are loaded.
+    Returns 200 with status ok and model_loaded flag.
     """
-    return {"status": "ok", "model_loaded": model_loaded}
-
-
-@app.post("/predict", response_model=PredictionResponse)
-async def predict(application: CreditApplication):
-    """
-    Score a credit application.
-
-    Accepts applicant features and returns the probability of default,
-    along with an approval decision and risk band.
-    """
-    prob = predict_default_probability(application, model, scaler, feature_names)
-    risk_band = get_risk_band(prob)
-    approved = prob < 0.35
-
-    return PredictionResponse(
-        approved=approved,
-        default_probability=round(prob, 4),
-        risk_band=risk_band,
+    return JSONResponse(
+        content={
+            "status": "ok",
+            "model_loaded": is_model_loaded(),
+        }
     )
+
+
+@app.post(
+    "/predict",
+    summary="Predict credit default",
+    response_model=PredictOutput,
+    tags=["prediction"],
+    responses={
+        200: {"description": "Prediction returned successfully"},
+        422: {"description": "Validation error in request body"},
+        500: {"description": "Internal prediction error"},
+    },
+)
+async def predict_endpoint(input_data: PredictInput):
+    """
+    Accept applicant features and return a credit default prediction.
+
+    Returns:
+        - approved: bool — loan approved if default_probability < 0.5
+        - default_probability: float — predicted probability of default
+        - risk_band: str — one of "low", "medium", "high"
+    """
+    try:
+        result = predict(input_data)
+        return result
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
