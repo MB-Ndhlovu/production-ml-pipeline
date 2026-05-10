@@ -1,85 +1,54 @@
-"""FastAPI application for the credit scoring prediction API."""
-from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException
+"""FastAPI application for the credit scoring service."""
 
-from src.predict import CreditApplication, PredictionResult, predict
+from fastapi import FastAPI, status
+from fastapi.responses import JSONResponse
+from pydantic import ValidationError
 
-
-_model_loaded = False
-
-
-def _try_load_model():
-    """Try to load model artifacts, return True on success."""
-    try:
-        from src.model import load_model, load_scaler, load_feature_names
-        load_model()
-        load_scaler()
-        load_feature_names()
-        return True
-    except Exception:
-        return False
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Attempt to load model artifacts on startup."""
-    global _model_loaded
-    _model_loaded = _try_load_model()
-    yield
+from src.model import load_model
+from src.predict import CreditApplication, predict
 
 
 app = FastAPI(
     title="Credit Scoring API",
     description="Production ML pipeline for credit default prediction",
     version="1.0.0",
-    lifespan=lifespan,
 )
 
+_model_loaded = False
+try:
+    load_model()
+    _model_loaded = True
+except Exception:
+    _model_loaded = False
 
-@app.get(
-    "/health",
-    response_model=dict,
-    tags=["health"],
-    summary="Health check",
-    responses={200: {"description": "Service is healthy"}},
-)
-def health():
+
+@app.get("/health", response_model=dict)
+async def health():
     """
-    Check API health and model loading status.
+    Health check endpoint.
 
-    Returns the service status and whether model artifacts
-    were successfully loaded on startup.
+    Returns the service status and whether the model was successfully loaded.
     """
-    return {"status": "ok", "model_loaded": _model_loaded}
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={"status": "ok", "model_loaded": _model_loaded},
+    )
 
 
-@app.post(
-    "/predict",
-    response_model=PredictionResult,
-    tags=["prediction"],
-    summary="Predict credit default",
-    responses={
-        200: {"description": "Prediction returned successfully"},
-        400: {"description": "Invalid input data"},
-        422: {"description": "Validation error"},
-    },
-)
-def predict_endpoint(application: CreditApplication):
+@app.post("/predict", response_model=dict)
+async def credit_predict(application: CreditApplication):
     """
-    Predict credit approval, default probability, and risk band.
+    Submit a credit application for scoring.
 
-    Accepts a credit application with income, credit score, employment
-    history, and other features. Returns whether the application is
-    approved, the probability of default, and a risk classification.
+    Returns the approval decision, estimated default probability, and risk band.
     """
-    global _model_loaded
-    if not _model_loaded:
-        _model_loaded = _try_load_model()
+    result = predict(application)
+    return JSONResponse(status_code=status.HTTP_200_OK, content=result)
 
-    if not _model_loaded:
-        raise HTTPException(status_code=503, detail="Model not loaded")
 
-    try:
-        return predict(application)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+@app.exception_handler(ValidationError)
+async def validation_exception_handler(request, exc):
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={"detail": exc.errors()},
+    )

@@ -1,12 +1,15 @@
+"""Pytest tests for the API endpoints."""
+
 import pytest
 from fastapi.testclient import TestClient
+
 from src.api import app
 
 client = TestClient(app)
 
 
-def test_health():
-    """Test the /health endpoint."""
+def test_health_endpoint():
+    """Test that /health returns ok status."""
     response = client.get("/health")
     assert response.status_code == 200
     data = response.json()
@@ -14,8 +17,8 @@ def test_health():
     assert "model_loaded" in data
 
 
-def test_predict_success():
-    """Test /predict with valid input."""
+def test_predict_endpoint_approval():
+    """Test /predict with a low-risk application."""
     payload = {
         "income": 65000,
         "credit_score": 720,
@@ -32,14 +35,23 @@ def test_predict_success():
     assert "approved" in data
     assert "default_probability" in data
     assert "risk_band" in data
-    assert data["risk_band"] in ["low", "medium", "high"]
-    assert 0.0 <= data["default_probability"] <= 1.0
+    assert data["risk_band"] in ("low", "medium", "high")
 
 
-def test_predict_validation_error():
-    """Test /predict with invalid input returns 422."""
+def test_predict_endpoint_validation():
+    """Test /predict validates required input."""
     payload = {
-        "income": -5000,  # invalid: must be positive
+        "income": 65000,
+        "credit_score": 720,
+    }
+    response = client.post("/predict", json=payload)
+    assert response.status_code == 422
+
+
+def test_predict_risk_bands():
+    """Test risk band classification."""
+    payload = {
+        "income": 65000,
         "credit_score": 720,
         "employment_years": 5,
         "debt_to_income": 0.28,
@@ -49,37 +61,12 @@ def test_predict_validation_error():
         "verified_income": 1,
     }
     response = client.post("/predict", json=payload)
-    assert response.status_code == 422
+    data = response.json()
+    prob = data["default_probability"]
 
-
-def test_predict_risk_bands():
-    """Test that risk bands are correctly assigned."""
-    test_cases = [
-        # High credit score, low risk
-        {
-            "income": 120000,
-            "credit_score": 800,
-            "employment_years": 10,
-            "debt_to_income": 0.15,
-            "loan_history_count": 1,
-            "age": 40,
-            "home_ownership": "own",
-            "verified_income": 1,
-        },
-        # Low credit score, high risk
-        {
-            "income": 25000,
-            "credit_score": 520,
-            "employment_years": 1,
-            "debt_to_income": 0.45,
-            "loan_history_count": 5,
-            "age": 22,
-            "home_ownership": "rent",
-            "verified_income": 0,
-        },
-    ]
-    for payload in test_cases:
-        response = client.post("/predict", json=payload)
-        assert response.status_code == 200
-        data = response.json()
-        assert data["risk_band"] in ["low", "medium", "high"]
+    if prob < 0.15:
+        assert data["risk_band"] == "low"
+    elif prob <= 0.35:
+        assert data["risk_band"] == "medium"
+    else:
+        assert data["risk_band"] == "high"

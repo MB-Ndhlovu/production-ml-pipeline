@@ -1,47 +1,49 @@
 """Batch prediction script using the API."""
+
 import argparse
 import json
-import sys
 import httpx
 
 
-def batch_predict(url: str, input_file: str, output_file: str | None = None):
+def batch_predict(url: str, applications: list[dict]):
     """
-    Run batch predictions via the API.
+    Send multiple predictions to the /predict endpoint.
 
-    Reads newline-delimited JSON from input_file, sends each record to
-    the /predict endpoint, and prints or writes results.
+    Args:
+        url: Base API URL (e.g., http://localhost:8000)
+        applications: List of credit application dicts
     """
     results = []
-    with open(input_file) as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            payload = json.loads(line)
-            with httpx.Client(timeout=30.0) as client:
-                resp = client.post(url, json=payload)
-                resp.raise_for_status()
-                results.append(resp.json())
+    with httpx.Client(timeout=30.0) as client:
+        for app in applications:
+            response = client.post(f"{url}/predict", json=app)
+            response.raise_for_status()
+            results.append(response.json())
 
-    if output_file:
-        with open(output_file, "w") as f:
-            json.dump(results, f, indent=2)
-        print(f"Saved {len(results)} results to {output_file}")
-    else:
-        for r in results:
-            print(json.dumps(r))
+    for i, (app, result) in enumerate(zip(applications, results)):
+        print(f"[{i+1}] income={app['income']}, approved={result['approved']}, "
+              f"prob={result['default_probability']}, band={result['risk_band']}")
 
-
-def main():
-    parser = argparse.ArgumentParser(description="Batch prediction via API")
-    parser.add_argument("--url", default="http://localhost:8000/predict", help="API endpoint URL")
-    parser.add_argument("--input", required=True, help="Input file (newline-delimited JSON)")
-    parser.add_argument("--output", help="Output file for results (optional)")
-    args = parser.parse_args()
-
-    batch_predict(args.url, args.input, args.output)
+    return results
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Batch prediction via API")
+    parser.add_argument("--url", default="http://localhost:8000", help="API base URL")
+    parser.add_argument("--file", help="JSON file with applications array")
+    args = parser.parse_args()
+
+    if args.file:
+        with open(args.file) as f:
+            applications = json.load(f)
+    else:
+        applications = [
+            {"income": 65000, "credit_score": 720, "employment_years": 5,
+             "debt_to_income": 0.28, "loan_history_count": 2, "age": 34,
+             "home_ownership": "rent", "verified_income": 1},
+            {"income": 30000, "credit_score": 580, "employment_years": 1,
+             "debt_to_income": 0.45, "loan_history_count": 5, "age": 22,
+             "home_ownership": "rent", "verified_income": 0},
+        ]
+
+    batch_predict(args.url, applications)

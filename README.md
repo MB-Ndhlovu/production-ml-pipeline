@@ -1,16 +1,18 @@
 # Production ML Pipeline with FastAPI
 
-A production-ready credit scoring prediction API built with FastAPI.
+A production-ready credit scoring API built with FastAPI, serving predictions from a trained scikit-learn model.
 
 ## Overview
 
-This project exposes a trained credit scoring model via a REST API with health checking, single predictions, and batch prediction support.
+This service loads a pre-trained credit scoring model and exposes it via a REST API for real-time predictions. It supports:
+- Single prediction via POST `/predict`
+- Batch prediction via script
+- Health checks for deployment monitoring
 
-## API Documentation
+## API Endpoints
 
-### `GET /health`
-
-Health check endpoint.
+### GET /health
+Health check endpoint. Returns service status and model load state.
 
 **Response:**
 ```json
@@ -20,9 +22,8 @@ Health check endpoint.
 }
 ```
 
-### `POST /predict`
-
-Predict credit approval and default probability.
+### POST /predict
+Submit a credit application for scoring.
 
 **Request Body:**
 ```json
@@ -49,53 +50,41 @@ Predict credit approval and default probability.
 
 **Risk Bands:**
 - `low`: probability < 0.15
-- `medium`: probability 0.15 – 0.35
+- `medium`: probability 0.15 - 0.35
 - `high`: probability > 0.35
+
+## Installation
+
+```bash
+pip install -r requirements.txt
+```
 
 ## Running Locally
 
 ```bash
-pip install -r requirements.txt
 python run_api.py
 ```
 
-API available at `http://localhost:8000`. Docs at `http://localhost:8000/docs`.
+The API will be available at `http://localhost:8000`. Interactive docs at `http://localhost:8000/docs`.
 
 ## Running Tests
 
 ```bash
-pip install -r requirements.txt pytest httpx
-pytest tests/
+pytest tests/ -v
 ```
 
 ## Deployment
 
-```bash
-pip install -r requirements.txt
-uvicorn src.api:app --host 0.0.0.0 --port 8000
-```
+The API is stateless and can be deployed to any platform that supports Python:
+- Railway, Render, Fly.io (recommended for simplicity)
+- Docker container
+- Kubernetes via uvicorn/gunicorn
 
-Or use the production runner:
+## Model Artifacts
 
-```bash
-python run_api.py
-```
+The model expects three artifacts in the `models/` directory:
+- `credit_model.pkl` — trained classifier
+- `scaler.pkl` — fitted StandardScaler
+- `feature_names.pkl` — list of feature names in order
 
-## Project Structure
-
-```
-production-ml-pipeline/
-├── README.md
-├── requirements.txt
-├── run_api.py
-├── models/               # Model artifacts (downloaded on first run)
-├── src/
-│   ├── __init__.py
-│   ├── api.py            # FastAPI app
-│   ├── model.py          # Model loading
-│   ├── predict.py        # Pydantic schemas & prediction logic
-│   └── batch.py          # Batch prediction script
-└── tests/
-    ├── __init__.py
-    └── test_api.py
-```
+These are downloaded from the credit-scoring-pipeline repository on first setup.
