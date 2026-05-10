@@ -1,49 +1,43 @@
-"""Batch prediction script using the API."""
+"""Batch prediction script — hits the /predict API for each applicant in a CSV."""
 
 import argparse
 import json
 import httpx
+import pandas as pd
 
 
-def batch_predict(url: str, applications: list[dict]):
+def score_batch(csv_path: str, base_url: str = "http://localhost:8000") -> pd.DataFrame:
     """
-    Send multiple predictions to the /predict endpoint.
+    Read a CSV of credit applications and score each via the API.
 
-    Args:
-        url: Base API URL (e.g., http://localhost:8000)
-        applications: List of credit application dicts
+    The CSV must have columns matching the CreditApplication schema:
+    income, credit_score, employment_years, debt_to_income, loan_history_count,
+    age, home_ownership, verified_income
     """
+    df = pd.read_csv(csv_path)
     results = []
+
     with httpx.Client(timeout=30.0) as client:
-        for app in applications:
-            response = client.post(f"{url}/predict", json=app)
-            response.raise_for_status()
-            results.append(response.json())
+        for _, row in df.iterrows():
+            payload = row.to_dict()
+            resp = client.post(f"{base_url}/predict", json=payload)
+            resp.raise_for_status()
+            results.append(resp.json())
 
-    for i, (app, result) in enumerate(zip(applications, results)):
-        print(f"[{i+1}] income={app['income']}, approved={result['approved']}, "
-              f"prob={result['default_probability']}, band={result['risk_band']}")
+    return pd.DataFrame(results)
 
-    return results
+
+def main():
+    parser = argparse.ArgumentParser(description="Batch-score credit applications via API")
+    parser.add_argument("csv", help="Path to input CSV")
+    parser.add_argument("--url", default="http://localhost:8000", help="API base URL")
+    parser.add_argument("--output", default="predictions.csv", help="Output CSV path")
+    args = parser.parse_args()
+
+    df = score_batch(args.csv, base_url=args.url)
+    df.to_csv(args.output, index=False)
+    print(f"Saved {len(df)} predictions to {args.output}")
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Batch prediction via API")
-    parser.add_argument("--url", default="http://localhost:8000", help="API base URL")
-    parser.add_argument("--file", help="JSON file with applications array")
-    args = parser.parse_args()
-
-    if args.file:
-        with open(args.file) as f:
-            applications = json.load(f)
-    else:
-        applications = [
-            {"income": 65000, "credit_score": 720, "employment_years": 5,
-             "debt_to_income": 0.28, "loan_history_count": 2, "age": 34,
-             "home_ownership": "rent", "verified_income": 1},
-            {"income": 30000, "credit_score": 580, "employment_years": 1,
-             "debt_to_income": 0.45, "loan_history_count": 5, "age": 22,
-             "home_ownership": "rent", "verified_income": 0},
-        ]
-
-    batch_predict(args.url, applications)
+    main()

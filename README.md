@@ -1,29 +1,20 @@
 # Production ML Pipeline with FastAPI
 
-A production-ready credit scoring API built with FastAPI, serving predictions from a trained scikit-learn model.
+A production-ready credit scoring API built with FastAPI, exposing a trained model for real-time predictions and batch processing.
 
-## Overview
+## Features
 
-This service loads a pre-trained credit scoring model and exposes it via a REST API for real-time predictions. It supports:
-- Single prediction via POST `/predict`
-- Batch prediction via script
-- Health checks for deployment monitoring
+- **Real-time predictions** via REST API
+- **Health check endpoint** for monitoring
+- **Batch prediction script** for bulk scoring
+- **Pydantic validation** for request/response schemas
+- **OpenAPI documentation** auto-generated
 
 ## API Endpoints
 
-### GET /health
-Health check endpoint. Returns service status and model load state.
+### `POST /predict`
 
-**Response:**
-```json
-{
-  "status": "ok",
-  "model_loaded": true
-}
-```
-
-### POST /predict
-Submit a credit application for scoring.
+Submit credit application features for scoring.
 
 **Request Body:**
 ```json
@@ -48,43 +39,70 @@ Submit a credit application for scoring.
 }
 ```
 
-**Risk Bands:**
-- `low`: probability < 0.15
-- `medium`: probability 0.15 - 0.35
-- `high`: probability > 0.35
+### `GET /health`
 
-## Installation
+Returns API health status and model load state.
+
+**Response:**
+```json
+{
+  "status": "ok",
+  "model_loaded": true
+}
+```
+
+## Risk Bands
+
+| Band | Probability Range |
+|------|-------------------|
+| Low | < 0.15 |
+| Medium | 0.15 – 0.35 |
+| High | > 0.35 |
+
+## Local Development
 
 ```bash
 pip install -r requirements.txt
-```
-
-## Running Locally
-
-```bash
 python run_api.py
 ```
 
-The API will be available at `http://localhost:8000`. Interactive docs at `http://localhost:8000/docs`.
+API available at `http://localhost:8000`
+Docs at `http://localhost:8000/docs`
 
-## Running Tests
+## Run Tests
 
 ```bash
-pytest tests/ -v
+pytest tests/
 ```
 
 ## Deployment
 
-The API is stateless and can be deployed to any platform that supports Python:
-- Railway, Render, Fly.io (recommended for simplicity)
-- Docker container
-- Kubernetes via uvicorn/gunicorn
+```bash
+# Install dependencies
+pip install -r requirements.txt
 
-## Model Artifacts
+# Run with gunicorn for production
+gunicorn -w 4 -k uvicorn.workers.UvicornWorker src.api:app
+```
 
-The model expects three artifacts in the `models/` directory:
-- `credit_model.pkl` — trained classifier
-- `scaler.pkl` — fitted StandardScaler
-- `feature_names.pkl` — list of feature names in order
+## Project Structure
 
-These are downloaded from the credit-scoring-pipeline repository on first setup.
+```
+production-ml-pipeline/
+├── README.md
+├── requirements.txt
+├── run_api.py
+├── models/              # Model artifacts
+│   ├── credit_model.pkl
+│   ├── scaler.pkl
+│   └── feature_names.pkl
+├── src/
+│   ├── __init__.py
+│   ├── model.py        # Artifact loading
+│   ├── predict.py      # Prediction logic + schemas
+│   ├── api.py          # FastAPI app
+│   └── batch.py        # Batch prediction script
+└── tests/
+    ├── __init__.py
+    └── test_api.py
+```

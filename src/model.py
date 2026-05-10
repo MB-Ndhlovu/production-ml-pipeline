@@ -1,29 +1,25 @@
-"""Model loading utilities for the credit scoring API."""
+"""Model artifact loading utilities."""
 
 import joblib
+import os
 from pathlib import Path
 
-MODEL_DIR = Path(__file__).parent.parent / "models"
-
-_model = None
-_scaler = None
-_feature_names = None
+ARTIFACTS_DIR = Path(__file__).parent.parent / "models"
 
 
 def load_model():
-    """Load model artifacts from the models directory."""
-    global _model, _scaler, _feature_names
-
-    if _model is None:
-        _model = joblib.load(MODEL_DIR / "credit_model.pkl")
-    if _scaler is None:
-        _scaler = joblib.load(MODEL_DIR / "scaler.pkl")
-    if _feature_names is None:
-        _feature_names = joblib.load(MODEL_DIR / "feature_names.pkl")
-
-    return _model, _scaler, _feature_names
+    """Load the trained credit scoring model."""
+    model_path = ARTIFACTS_DIR / "credit_model.pkl"
+    return joblib.load(model_path)
 
 
-def get_model():
-    """Get loaded model artifacts."""
-    return load_model()
+def load_scaler():
+    """Load the feature scaler."""
+    scaler_path = ARTIFACTS_DIR / "scaler.pkl"
+    return joblib.load(scaler_path)
+
+
+def load_feature_names():
+    """Load the expected feature names."""
+    names_path = ARTIFACTS_DIR / "feature_names.pkl"
+    return joblib.load(names_path)
