@@ -1,57 +1,68 @@
-"""FastAPI application for credit scoring."""
+"""FastAPI application with credit prediction endpoints."""
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 
-from src.model import is_model_loaded, load_artifacts
-from src.predict import CreditApplication, PredictionResult, make_prediction
+from .model import credit_model
+from .predict import PredictInput, PredictOutput, predict
 
 app = FastAPI(
     title="Credit Scoring API",
-    description="Real-time credit default prediction API.",
+    description="Real-time credit default prediction API with risk band classification.",
     version="1.0.0",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
 @app.on_event("startup")
 def startup_event():
-    """Load model artifacts at startup."""
-    load_artifacts()
+    """Load model artifacts on startup."""
+    credit_model.load()
 
 
-@app.get("/health", tags=["health"])
-async def health():
+@app.get(
+    "/health",
+    summary="Health check",
+    response_model=dict,
+    responses={200: {"description": "Service is healthy"}},
+)
+def health():
     """
     Health check endpoint.
 
-    Returns the operational status of the API and whether
-    the model artifacts have been loaded successfully.
+    Returns the service status and whether the model was successfully loaded.
     """
-    return JSONResponse(
-        content={
-            "status": "ok",
-            "model_loaded": is_model_loaded(),
-        }
-    )
+    return {"status": "ok", "model_loaded": credit_model.is_loaded}
 
 
-@app.post("/predict", response_model=PredictionResult, tags=["inference"])
-async def predict(application: CreditApplication):
+@app.post(
+    "/predict",
+    summary="Predict credit approval",
+    response_model=PredictOutput,
+    responses={
+        200: {"description": "Prediction result"},
+        400: {"description": "Invalid input"},
+        503: {"description": "Model not loaded"},
+    },
+)
+def predict_endpoint(input_data: PredictInput):
     """
-    Classify a credit application.
+    Make a credit approval prediction.
 
-    Accepts applicant features and returns the probability of default,
-    an approval decision, and a risk band.
-
-    Risk bands:
-    - **low**: probability < 0.15
-    - **medium**: 0.15 <= probability <= 0.35
-    - **high**: probability > 0.35
-
-    Approval is granted when probability < 0.35.
+    Accepts applicant features and returns:
+    - **approved**: boolean approval decision
+    - **default_probability**: predicted probability of default
+    - **risk_band**: low | medium | high
     """
-    try:
-        result = make_prediction(application)
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    if not credit_model.is_loaded:
+        raise HTTPException(status_code=503, detail="Model not loaded")
+
+    result = predict(input_data)
+    return result

@@ -1,23 +1,45 @@
 # Production ML Pipeline
 
-A FastAPI-powered credit scoring API for real-time and batch inference.
+A FastAPI-based credit scoring API for real-time inference and batch predictions.
 
 ## Overview
 
-This project serves a trained credit scoring model via a REST API. It accepts applicant features and returns a default probability, approval decision, and risk band.
+This service loads a trained credit scoring model and provides:
+- Real-time single prediction via REST API
+- Batch prediction via script
+- Health check endpoint for monitoring
+
+## Installation
+
+```bash
+pip install -r requirements.txt
+```
+
+## Run the API
+
+```bash
+python run_api.py
+```
+
+The server starts on `http://localhost:8000`.
 
 ## API Endpoints
 
-### `GET /health`
-Health check. Returns model load status.
+### GET /health
+
+Health check. Returns model loading status.
 
 **Response:**
 ```json
-{"status": "ok", "model_loaded": true}
+{
+  "status": "ok",
+  "model_loaded": true
+}
 ```
 
-### `POST /predict`
-Classify a credit application.
+### POST /predict
+
+Make a credit approval prediction.
 
 **Request body:**
 ```json
@@ -37,56 +59,40 @@ Classify a credit application.
 ```json
 {
   "approved": true,
-  "default_probability": 0.1023,
+  "default_probability": 0.12,
   "risk_band": "low"
 }
 ```
 
 **Risk bands:**
-| Band    | Probability threshold |
-|---------|----------------------|
-| low     | < 0.15               |
-| medium  | 0.15 – 0.35          |
-| high    | > 0.35               |
+- `low`: probability < 0.15
+- `medium`: probability 0.15–0.35
+- `high`: probability > 0.35
 
-## Setup
-
-```bash
-pip install -r requirements.txt
-```
-
-## Run locally
-
-```bash
-python run_api.py
-```
-
-Server starts at `http://localhost:8000`.
-
-## Run tests
+## Run Tests
 
 ```bash
 pytest tests/ -v
 ```
 
-## Batch prediction
-
-```bash
-python -m src.batch --input data.csv --url http://localhost:8000
-```
-
 ## Deployment
 
-Deploy to any platform that supports Python (Railway, Render, Fly.io, etc.):
+The API can be containerized or deployed to any Python-capable host:
 
 ```bash
-pip install -r requirements.txt
-uvicorn src.api:app --host 0.0.0.0 --port $PORT
+uvicorn src.api:app --host 0.0.0.0 --port 8000
 ```
 
-## Model artifacts
+For production, consider:
+- Running behind a reverse proxy (nginx)
+- Enabling CORS middleware if needed
+- Adding authentication
+- Using gunicorn for multi-worker deployment
 
-Model files are loaded from `models/`:
-- `credit_model.pkl` — trained classifier
-- `scaler.pkl` — feature scaler
-- `feature_names.pkl` — expected feature ordering
+## Batch Predictions
+
+Use `src/batch.py` to score multiple applicants via the API:
+
+```bash
+python src/batch.py --url http://localhost:8000 --input data.csv --output results.csv
+```

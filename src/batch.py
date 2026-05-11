@@ -1,37 +1,41 @@
 """Batch prediction script using the API."""
 
 import argparse
-import httpx
 import pandas as pd
+import requests
+import json
+import sys
 
 
-def run_batch(input_path: str, url: str):
-    """
-    Run predictions on a CSV of applications.
+def score_row(url: str, row: dict) -> dict:
+    """Send a single row to the /predict endpoint."""
+    try:
+        resp = requests.post(f"{url}/predict", json=row, timeout=30)
+        resp.raise_for_status()
+        return resp.json()
+    except Exception as e:
+        return {"error": str(e)}
 
-    Args:
-        input_path: Path to CSV with one row per application.
-        url: Base URL of the prediction API.
-    """
-    df = pd.read_csv(input_path)
+
+def main():
+    parser = argparse.ArgumentParser(description="Batch prediction via API")
+    parser.add_argument("--url", default="http://localhost:8000", help="API base URL")
+    parser.add_argument("--input", required=True, help="Input CSV path")
+    parser.add_argument("--output", required=True, help="Output CSV path")
+    args = parser.parse_args()
+
+    df = pd.read_csv(args.input)
     results = []
 
-    with httpx.Client(timeout=30.0) as client:
-        for _, row in df.iterrows():
-            payload = row.to_dict()
-            resp = client.post(f"{url}/predict", json=payload)
-            resp.raise_for_status()
-            data = resp.json()
-            results.append(data)
+    for _, row in df.iterrows():
+        payload = row.to_dict()
+        result = score_row(args.url, payload)
+        results.append(result)
 
-    out = pd.DataFrame(results)
-    out.to_csv("predictions_output.csv", index=False)
-    print(f"Wrote {len(results)} predictions to predictions_output.csv")
+    out_df = pd.DataFrame(results)
+    out_df.to_csv(args.output, index=False)
+    print(f"Results written to {args.output}")
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Batch prediction via API")
-    parser.add_argument("--input", required=True, help="Path to input CSV")
-    parser.add_argument("--url", default="http://localhost:8000", help="API base URL")
-    args = parser.parse_args()
-    run_batch(args.input, args.url)
+    main()
