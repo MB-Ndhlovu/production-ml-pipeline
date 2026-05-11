@@ -9,16 +9,15 @@ _feature_names = None
 
 
 def load_artifacts():
-    """Load all model artifacts from disk."""
+    """Load all model artifacts from the models/ directory."""
     global _model, _scaler, _feature_names
+
     _model = joblib.load(MODEL_DIR / "credit_model.pkl")
     _scaler = joblib.load(MODEL_DIR / "scaler.pkl")
     _feature_names = joblib.load(MODEL_DIR / "feature_names.pkl")
-    return _model, _scaler, _feature_names
 
 
 def get_model():
-    """Return the loaded model, loading if necessary."""
     if _model is None:
         load_artifacts()
     return _model

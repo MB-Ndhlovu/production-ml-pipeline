@@ -1,31 +1,50 @@
-from fastapi import FastAPI
-from src.predict import PredictionRequest, PredictionResponse, predict_default
+from fastapi import FastAPI, HTTPException
+from .predict import PredictInput, PredictOutput, predict
+from .model import load_artifacts, get_model
 
 app = FastAPI(
     title="Credit Scoring API",
     description="Production ML pipeline for credit default prediction",
-    version="1.0.0",
+    version="1.0.0"
 )
 
+_model_loaded = False
 
-@app.get("/health", tags=["health"])
-async def health():
-    """Check service health and model loading status."""
-    from src.model import get_model
+
+@app.on_event("startup")
+def startup_event():
+    """Load model artifacts on startup."""
+    global _model_loaded
     try:
-        model = get_model()
-        model_loaded = model is not None
-    except Exception:
-        model_loaded = False
-    return {"status": "ok", "model_loaded": model_loaded}
+        load_artifacts()
+        _model_loaded = True
+    except Exception as e:
+        _model_loaded = False
+        raise RuntimeError(f"Failed to load model artifacts: {e}")
 
 
-@app.post("/predict", response_model=PredictionResponse, tags=["prediction"])
-async def predict(request: PredictionRequest):
+@app.get("/health", response_model=dict, tags=["Health"])
+def health():
     """
-    Predict credit default probability and risk band.
+    Health check endpoint.
 
-    Returns the predicted probability of default, risk classification,
-    and whether the application is approved based on a 0.5 threshold.
+    Returns the current status of the service and whether the model is loaded.
     """
-    return predict_default(request)
+    return {
+        "status": "ok",
+        "model_loaded": _model_loaded
+    }
+
+
+@app.post("/predict", response_model=PredictOutput, tags=["Predictions"])
+def predict_endpoint(input_data: PredictInput):
+    """
+    Predict credit default probability.
+
+    Accepts applicant features and returns an approval decision with
+    probability and risk band.
+    """
+    try:
+        return predict(input_data)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

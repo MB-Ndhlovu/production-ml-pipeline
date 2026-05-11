@@ -1,39 +1,35 @@
-# Production ML Pipeline with FastAPI
+# Production ML Pipeline
 
-Credit scoring prediction API using a trained scikit-learn model.
+A FastAPI-powered credit scoring prediction API with health checks, real-time predictions, and batch processing support.
 
 ## Overview
 
-REST API for credit default prediction with:
-- Real-time single prediction via `POST /predict`
-- Health check via `GET /health`
-- Batch prediction script via `src/batch.py`
+This project provides a production-ready ML inference pipeline for credit default prediction. It loads pre-trained model artifacts and exposes them via a documented REST API.
 
-## Installation
+## Features
 
-```bash
-pip install -r requirements.txt
-```
+- **Real-time Predictions** via POST `/predict`
+- **Health Checks** via GET `/health`
+- **Batch Prediction** script for processing multiple records
+- **OpenAPI Documentation** at `/docs`
+- **Risk Stratification** with low/medium/high bands
 
-## Run the API
+## API Documentation
 
-```bash
-python run_api.py
-```
+### GET /health
 
-The API runs on `http://localhost:8000`. Swagger docs at `http://localhost:8000/docs`.
-
-## API Endpoints
-
-### `GET /health`
-Returns service health and model loading status.
+Returns service health status.
 
 ```json
-{"status": "ok", "model_loaded": true}
+{
+  "status": "ok",
+  "model_loaded": true
+}
 ```
 
-### `POST /predict`
-Accepts credit application features and returns a prediction.
+### POST /predict
+
+Accepts a JSON body with applicant features and returns a credit decision.
 
 **Request body:**
 ```json
@@ -58,46 +54,48 @@ Accepts credit application features and returns a prediction.
 }
 ```
 
-**Risk bands:**
+**Risk Bands:**
 - `low`: probability < 0.15
-- `medium`: probability 0.15 – 0.35
+- `medium`: probability 0.15–0.35
 - `high`: probability > 0.35
+
+## Installation
+
+```bash
+pip install -r requirements.txt
+```
+
+## Running the API
+
+```bash
+python run_api.py
+```
+
+The server starts on `http://localhost:8000`. API docs available at `http://localhost:8000/docs`.
+
+## Running Tests
+
+```bash
+pytest tests/
+```
 
 ## Batch Predictions
 
 ```bash
-python -m src.batch --input data.csv --output predictions.csv --url http://localhost:8000
+python -m src.batch --input data.csv --output predictions.csv
 ```
 
 ## Deployment
 
-### Local
+For production deployment, use uvicorn with workers:
+
 ```bash
-uvicorn src.api:app --host 0.0.0.0 --port 8000
+uvicorn src.api:app --host 0.0.0.0 --port 8000 --workers 4
 ```
 
-### Docker
-```dockerfile
-FROM python:3.12-slim
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-COPY . .
-CMD ["uvicorn", "src.api:app", "--host", "0.0.0.0", "--port", "8000"]
-```
+## Model Artifacts
 
-## Project Structure
-
-```
-production-ml-pipeline/
-├── models/            # Serialized model artifacts
-├── src/
-│   ├── model.py       # Model loading utilities
-│   ├── predict.py     # Prediction logic & schemas
-│   ├── api.py          # FastAPI application
-│   └── batch.py        # Batch prediction script
-├── tests/
-│   └── test_api.py    # API endpoint tests
-├── run_api.py         # Local dev server entrypoint
-├── requirements.txt
-└── README.md
-```
+Model artifacts are loaded from the `models/` directory:
+- `credit_model.pkl` — trained classifier
+- `scaler.pkl` — feature scaler
+- `feature_names.pkl` — expected feature names and ordering
