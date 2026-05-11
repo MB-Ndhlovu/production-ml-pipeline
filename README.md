@@ -1,32 +1,25 @@
-# Production ML Pipeline — Credit Scoring API
+# Production ML Pipeline
 
-FastAPI-powered REST API for real-time and batch credit default prediction.
+A FastAPI-powered credit scoring API for real-time and batch inference.
 
 ## Overview
 
-Loads a pre-trained credit scoring model and scaler from the `credit-scoring-pipeline` repo, then exposes:
-- Single-prediction endpoint (`POST /predict`)
-- Health check endpoint (`GET /health`)
+This project serves a trained credit scoring model via a REST API. It accepts applicant features and returns a default probability, approval decision, and risk band.
 
-## API Docs
+## API Endpoints
 
 ### `GET /health`
+Health check. Returns model load status.
 
-Returns API and model status.
-
-**Response**
+**Response:**
 ```json
-{
-  "status": "ok",
-  "model_loaded": true
-}
+{"status": "ok", "model_loaded": true}
 ```
 
 ### `POST /predict`
+Classify a credit application.
 
-Predicts credit default probability for an applicant.
-
-**Request body**
+**Request body:**
 ```json
 {
   "income": 65000,
@@ -40,52 +33,60 @@ Predicts credit default probability for an applicant.
 }
 ```
 
-**Response**
+**Response:**
 ```json
 {
   "approved": true,
-  "default_probability": 0.12,
+  "default_probability": 0.1023,
   "risk_band": "low"
 }
 ```
 
-**Risk bands**
-| Band   | Probability range |
-|--------|-------------------|
-| `low`   | `< 0.15`          |
-| `medium`| `0.15 – 0.35`    |
-| `high`  | `> 0.35`          |
+**Risk bands:**
+| Band    | Probability threshold |
+|---------|----------------------|
+| low     | < 0.15               |
+| medium  | 0.15 – 0.35          |
+| high    | > 0.35               |
 
-## Local Development
+## Setup
 
 ```bash
-# Install dependencies
 pip install -r requirements.txt
+```
 
-# Download model artifacts (auto-downloaded on first run)
-# Artifacts sourced from: https://github.com/MB-Ndhlovu/credit-scoring-pipeline
+## Run locally
 
-# Run the server
+```bash
 python run_api.py
 ```
 
-## Testing
+Server starts at `http://localhost:8000`.
+
+## Run tests
 
 ```bash
 pytest tests/ -v
 ```
 
-## Deployment
-
-Any platform that supports Python + Uvicorn (Render, Railway, Fly.io, Docker):
+## Batch prediction
 
 ```bash
-# Dockerfile example
-FROM python:3.11-slim
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-COPY . .
-EXPOSE 8000
-CMD ["uvicorn", "src.api:app", "--host", "0.0.0.0", "--port", "8000"]
+python -m src.batch --input data.csv --url http://localhost:8000
 ```
+
+## Deployment
+
+Deploy to any platform that supports Python (Railway, Render, Fly.io, etc.):
+
+```bash
+pip install -r requirements.txt
+uvicorn src.api:app --host 0.0.0.0 --port $PORT
+```
+
+## Model artifacts
+
+Model files are loaded from `models/`:
+- `credit_model.pkl` — trained classifier
+- `scaler.pkl` — feature scaler
+- `feature_names.pkl` — expected feature ordering
