@@ -1,68 +1,31 @@
-"""FastAPI application with credit prediction endpoints."""
-
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-
-from .model import credit_model
-from .predict import PredictInput, PredictOutput, predict
+from fastapi import FastAPI
+from src.predict import PredictionRequest, PredictionResponse, predict_default
 
 app = FastAPI(
     title="Credit Scoring API",
-    description="Real-time credit default prediction API with risk band classification.",
+    description="Production ML pipeline for credit default prediction",
     version="1.0.0",
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+
+@app.get("/health", tags=["health"])
+async def health():
+    """Check service health and model loading status."""
+    from src.model import get_model
+    try:
+        model = get_model()
+        model_loaded = model is not None
+    except Exception:
+        model_loaded = False
+    return {"status": "ok", "model_loaded": model_loaded}
 
 
-@app.on_event("startup")
-def startup_event():
-    """Load model artifacts on startup."""
-    credit_model.load()
-
-
-@app.get(
-    "/health",
-    summary="Health check",
-    response_model=dict,
-    responses={200: {"description": "Service is healthy"}},
-)
-def health():
+@app.post("/predict", response_model=PredictionResponse, tags=["prediction"])
+async def predict(request: PredictionRequest):
     """
-    Health check endpoint.
+    Predict credit default probability and risk band.
 
-    Returns the service status and whether the model was successfully loaded.
+    Returns the predicted probability of default, risk classification,
+    and whether the application is approved based on a 0.5 threshold.
     """
-    return {"status": "ok", "model_loaded": credit_model.is_loaded}
-
-
-@app.post(
-    "/predict",
-    summary="Predict credit approval",
-    response_model=PredictOutput,
-    responses={
-        200: {"description": "Prediction result"},
-        400: {"description": "Invalid input"},
-        503: {"description": "Model not loaded"},
-    },
-)
-def predict_endpoint(input_data: PredictInput):
-    """
-    Make a credit approval prediction.
-
-    Accepts applicant features and returns:
-    - **approved**: boolean approval decision
-    - **default_probability**: predicted probability of default
-    - **risk_band**: low | medium | high
-    """
-    if not credit_model.is_loaded:
-        raise HTTPException(status_code=503, detail="Model not loaded")
-
-    result = predict(input_data)
-    return result
+    return predict_default(request)

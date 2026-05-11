@@ -1,13 +1,13 @@
-# Production ML Pipeline
+# Production ML Pipeline with FastAPI
 
-A FastAPI-based credit scoring API for real-time inference and batch predictions.
+Credit scoring prediction API using a trained scikit-learn model.
 
 ## Overview
 
-This service loads a trained credit scoring model and provides:
-- Real-time single prediction via REST API
-- Batch prediction via script
-- Health check endpoint for monitoring
+REST API for credit default prediction with:
+- Real-time single prediction via `POST /predict`
+- Health check via `GET /health`
+- Batch prediction script via `src/batch.py`
 
 ## Installation
 
@@ -21,25 +21,19 @@ pip install -r requirements.txt
 python run_api.py
 ```
 
-The server starts on `http://localhost:8000`.
+The API runs on `http://localhost:8000`. Swagger docs at `http://localhost:8000/docs`.
 
 ## API Endpoints
 
-### GET /health
+### `GET /health`
+Returns service health and model loading status.
 
-Health check. Returns model loading status.
-
-**Response:**
 ```json
-{
-  "status": "ok",
-  "model_loaded": true
-}
+{"status": "ok", "model_loaded": true}
 ```
 
-### POST /predict
-
-Make a credit approval prediction.
+### `POST /predict`
+Accepts credit application features and returns a prediction.
 
 **Request body:**
 ```json
@@ -66,33 +60,44 @@ Make a credit approval prediction.
 
 **Risk bands:**
 - `low`: probability < 0.15
-- `medium`: probability 0.15–0.35
+- `medium`: probability 0.15 – 0.35
 - `high`: probability > 0.35
 
-## Run Tests
+## Batch Predictions
 
 ```bash
-pytest tests/ -v
+python -m src.batch --input data.csv --output predictions.csv --url http://localhost:8000
 ```
 
 ## Deployment
 
-The API can be containerized or deployed to any Python-capable host:
-
+### Local
 ```bash
 uvicorn src.api:app --host 0.0.0.0 --port 8000
 ```
 
-For production, consider:
-- Running behind a reverse proxy (nginx)
-- Enabling CORS middleware if needed
-- Adding authentication
-- Using gunicorn for multi-worker deployment
+### Docker
+```dockerfile
+FROM python:3.12-slim
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY . .
+CMD ["uvicorn", "src.api:app", "--host", "0.0.0.0", "--port", "8000"]
+```
 
-## Batch Predictions
+## Project Structure
 
-Use `src/batch.py` to score multiple applicants via the API:
-
-```bash
-python src/batch.py --url http://localhost:8000 --input data.csv --output results.csv
+```
+production-ml-pipeline/
+├── models/            # Serialized model artifacts
+├── src/
+│   ├── model.py       # Model loading utilities
+│   ├── predict.py     # Prediction logic & schemas
+│   ├── api.py          # FastAPI application
+│   └── batch.py        # Batch prediction script
+├── tests/
+│   └── test_api.py    # API endpoint tests
+├── run_api.py         # Local dev server entrypoint
+├── requirements.txt
+└── README.md
 ```
