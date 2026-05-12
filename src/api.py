@@ -1,50 +1,56 @@
+"""FastAPI application for the credit scoring prediction API."""
+
 from fastapi import FastAPI, HTTPException
-from .predict import PredictInput, PredictOutput, predict
-from .model import load_artifacts, get_model
+from fastapi.responses import JSONResponse
+
+from src.model import is_model_loaded
+from src.predict import PredictInput, PredictOutput, predict_default
+
 
 app = FastAPI(
-    title="Credit Scoring API",
-    description="Production ML pipeline for credit default prediction",
-    version="1.0.0"
+    title="Credit Default Prediction API",
+    description="Production ML pipeline for credit default probability estimation.",
+    version="1.0.0",
 )
 
-_model_loaded = False
 
-
-@app.on_event("startup")
-def startup_event():
-    """Load model artifacts on startup."""
-    global _model_loaded
-    try:
-        load_artifacts()
-        _model_loaded = True
-    except Exception as e:
-        _model_loaded = False
-        raise RuntimeError(f"Failed to load model artifacts: {e}")
-
-
-@app.get("/health", response_model=dict, tags=["Health"])
+@app.get(
+    "/health",
+    summary="Health check",
+    response_model=dict,
+    responses={200: {"description": "API is healthy"}},
+)
 def health():
     """
     Health check endpoint.
 
-    Returns the current status of the service and whether the model is loaded.
+    Returns the current status of the API and whether the model artifacts
+    have been successfully loaded.
     """
-    return {
-        "status": "ok",
-        "model_loaded": _model_loaded
-    }
+    return JSONResponse(
+        content={
+            "status": "ok",
+            "model_loaded": is_model_loaded(),
+        }
+    )
 
 
-@app.post("/predict", response_model=PredictOutput, tags=["Predictions"])
-def predict_endpoint(input_data: PredictInput):
+@app.post(
+    "/predict",
+    summary="Predict credit default",
+    response_model=PredictOutput,
+    responses={200: {"description": "Prediction result"}},
+)
+def predict(input_data: PredictInput):
     """
-    Predict credit default probability.
+    Run a credit default prediction.
 
-    Accepts applicant features and returns an approval decision with
-    probability and risk band.
+    Accepts a JSON payload with application features and returns the default
+    probability, risk band, and an approval decision.
+
+    Risk bands:
+    - **low**: probability < 0.15
+    - **medium**: 0.15 ≤ probability ≤ 0.35
+    - **high**: probability > 0.35
     """
-    try:
-        return predict(input_data)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    return predict_default(input_data)

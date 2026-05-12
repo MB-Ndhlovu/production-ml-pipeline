@@ -1,23 +1,30 @@
-from typing import Literal
+"""Prediction logic and Pydantic schemas."""
+
+from enum import Enum
+from typing import Annotated
+
 from pydantic import BaseModel, Field
 
 
+class RiskBand(str, Enum):
+    """Risk classification bands based on default probability."""
+
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+
 class PredictInput(BaseModel):
-    income: float = Field(..., description="Annual income")
-    credit_score: int = Field(..., description="Credit score")
-    employment_years: int = Field(..., description="Years employed")
-    debt_to_income: float = Field(..., description="Debt-to-income ratio")
-    loan_history_count: int = Field(..., description="Number of previous loans")
-    age: int = Field(..., description="Applicant age")
-    home_ownership: Literal["rent", "own", "mortgage"] = Field(..., description="Home ownership status")
-    verified_income: int = Field(..., description="Income verified (1=yes, 0=no)")
-    loan_amount: float = Field(default=10000, description="Loan amount")
-    interest_rate: float = Field(default=0.10, description="Interest rate")
-    num_credit_lines: int = Field(default=2, description="Number of credit lines")
-    delinquency_2yrs: int = Field(default=0, description="Delinquencies in last 2 years")
-    loan_purpose: Literal["business", "debt_consolidation", "home_improvement", "major_purchase", "other"] = Field(
-        default="other", description="Loan purpose"
-    )
+    """Schema for a single credit application prediction request."""
+
+    income: Annotated[float, Field(gt=0, description="Annual income in ZAR")]
+    credit_score: Annotated[int, Field(ge=300, le=850, description="Credit score (300–850)")]
+    employment_years: Annotated[int, Field(ge=0, description="Years in current employment")]
+    debt_to_income: Annotated[float, Field(ge=0, le=1, description="Debt-to-income ratio (0–1)")]
+    loan_history_count: Annotated[int, Field(ge=0, description="Number of past loans")]
+    age: Annotated[int, Field(gt=18, description="Applicant age")]
+    home_ownership: Annotated[str, Field(description="Own, rent, or mortgage")]
+    verified_income: Annotated[int, Field(ge=0, le=1, description="Income verified (0/1)")]
 
     model_config = {
         "json_schema_extra": {
@@ -30,73 +37,90 @@ class PredictInput(BaseModel):
                 "age": 34,
                 "home_ownership": "rent",
                 "verified_income": 1,
-                "loan_amount": 10000,
-                "interest_rate": 0.10,
-                "num_credit_lines": 2,
-                "delinquency_2yrs": 0,
-                "loan_purpose": "other"
             }
         }
     }
 
 
 class PredictOutput(BaseModel):
-    approved: bool = Field(..., description="Whether the loan is approved")
-    default_probability: float = Field(..., description="Predicted probability of default")
-    risk_band: Literal["low", "medium", "high"] = Field(..., description="Risk classification")
+    """Schema for a single credit application prediction response."""
+
+    approved: bool
+    default_probability: float
+    risk_band: RiskBand
 
 
-def get_risk_band(probability: float) -> Literal["low", "medium", "high"]:
+def _classify_band(probability: float) -> RiskBand:
+    """Classify probability into a risk band."""
     if probability < 0.15:
-        return "low"
-    elif probability <= 0.35:
-        return "medium"
-    else:
-        return "high"
+        return RiskBand.LOW
+    if probability <= 0.35:
+        return RiskBand.MEDIUM
+    return RiskBand.HIGH
 
 
-def predict(input_data: PredictInput) -> PredictOutput:
-    import numpy as np
-    from .model import get_model, get_scaler, get_feature_names
+def _one_hot(value: str, categories: list[str]) -> list[int]:
+    """Return one-hot vector given the active category."""
+    return [1 if value.lower() == cat.lower() else 0 for cat in categories]
+
+
+def predict_default(input_data: PredictInput) -> PredictOutput:
+    """
+    Run a credit default prediction on a single application.
+
+    Parameters
+    ----------
+    input_data : PredictInput
+        Validated application features.
+
+    Returns
+    -------
+    PredictOutput
+        Prediction result with approval decision, probability, and risk band.
+    """
+    from src.model import get_feature_names, get_model, get_scaler
 
     model = get_model()
     scaler = get_scaler()
     feature_names = get_feature_names()
 
-    # Build feature dict with defaults for optional fields
-    ho_upper = input_data.home_ownership.upper()
-    lp = input_data.loan_purpose
+    home_categories = ["MORTGAGE", "OTHER", "OWN", "RENT"]
+    loan_purpose_categories = ["business", "debt_consolidation", "home_improvement", "major_purchase", "other"]
 
-    raw_features = {
-        "credit_score": input_data.credit_score,
-        "annual_income": input_data.income,
-        "debt_to_income": input_data.debt_to_income,
-        "employment_years": input_data.employment_years,
-        "loan_amount": input_data.loan_amount,
-        "interest_rate": input_data.interest_rate,
-        "verified_income": input_data.verified_income,
-        "num_credit_lines": input_data.num_credit_lines,
-        "delinquency_2yrs": input_data.delinquency_2yrs,
-        "loan_purpose_business": 1 if lp == "business" else 0,
-        "loan_purpose_debt_consolidation": 1 if lp == "debt_consolidation" else 0,
-        "loan_purpose_home_improvement": 1 if lp == "home_improvement" else 0,
-        "loan_purpose_major_purchase": 1 if lp == "major_purchase" else 0,
-        "loan_purpose_other": 1 if lp == "other" else 0,
-        "home_ownership_MORTGAGE": 1 if ho_upper == "MORTGAGE" else 0,
-        "home_ownership_OTHER": 1 if input_data.home_ownership == "other" else 0,
-        "home_ownership_OWN": 1 if ho_upper == "OWN" else 0,
-        "home_ownership_RENT": 1 if ho_upper == "RENT" else 0,
-    }
+    home_oh = _one_hot(input_data.home_ownership, home_categories)
+    purpose_oh = _one_hot("other", loan_purpose_categories)
 
-    ordered = np.array([[raw_features[f] for f in feature_names]])
-    scaled = scaler.transform(ordered)
-    prob = model.predict_proba(scaled)[0][1]
+    raw_features = [
+        input_data.credit_score,       # credit_score
+        input_data.income,              # annual_income
+        input_data.debt_to_income,      # debt_to_income
+        input_data.employment_years,    # employment_years
+        10000.0,                        # loan_amount (default)
+        0.15,                           # interest_rate (default)
+        input_data.verified_income,     # verified_income
+        input_data.loan_history_count,  # num_credit_lines
+        0,                              # delinquency_2yrs (default)
+        purpose_oh[0],                   # loan_purpose_business
+        purpose_oh[1],                   # loan_purpose_debt_consolidation
+        purpose_oh[2],                   # loan_purpose_home_improvement
+        purpose_oh[3],                  # loan_purpose_major_purchase
+        purpose_oh[4],                   # loan_purpose_other
+        home_oh[0],                      # home_ownership_MORTGAGE
+        home_oh[1],                      # home_ownership_OTHER
+        home_oh[2],                      # home_ownership_OWN
+        home_oh[3],                      # home_ownership_RENT
+    ]
 
-    approved = prob < 0.35
-    risk_band = get_risk_band(prob)
+    assert len(raw_features) == len(feature_names), \
+        f"Feature count mismatch: got {len(raw_features)}, expected {len(feature_names)}"
+
+    scaled = scaler.transform([raw_features])
+    probability = float(model.predict_proba(scaled)[0, 1])
+    band = _classify_band(probability)
+    approved = probability < 0.25
 
     return PredictOutput(
         approved=approved,
-        default_probability=round(float(prob), 4),
-        risk_band=risk_band
+        default_probability=round(probability, 4),
+        risk_band=band,
     )

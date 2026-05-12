@@ -1,1 +1,1 @@
-# Test package
+"""Pytest test suite for the credit default prediction API."""

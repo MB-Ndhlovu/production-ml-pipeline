@@ -1,59 +1,55 @@
-#!/usr/bin/env python3
-"""
-Batch prediction script.
-
-Usage:
-    python -m src.batch --input data.csv --output predictions.csv
-"""
+"""Batch prediction script using the prediction API."""
 
 import argparse
-import pandas as pd
-import httpx
+import json
 import sys
 
+import requests
 
-def run_batch(input_path: str, output_path: str, base_url: str = "http://localhost:8000"):
-    df = pd.read_csv(input_path)
+DEFAULT_URL = "http://localhost:8000/predict"
+
+
+def send_batch(payloads: list[dict], api_url: str = DEFAULT_URL) -> list[dict]:
+    """Send a list of prediction requests to the API."""
     results = []
-
-    # Ensure API is running
-    try:
-        resp = httpx.get(f"{base_url}/health", timeout=5)
-        resp.raise_for_status()
-    except Exception as e:
-        print(f"Error: Cannot connect to API at {base_url}. Is it running?", file=sys.stderr)
-        sys.exit(1)
-
-    for _, row in df.iterrows():
-        payload = {
-            "income": float(row["income"]),
-            "credit_score": int(row["credit_score"]),
-            "employment_years": int(row["employment_years"]),
-            "debt_to_income": float(row["debt_to_income"]),
-            "loan_history_count": int(row["loan_history_count"]),
-            "age": int(row["age"]),
-            "home_ownership": str(row["home_ownership"]),
-            "verified_income": int(row["verified_income"]),
-        }
-        try:
-            resp = httpx.post(f"{base_url}/predict", json=payload, timeout=10)
-            resp.raise_for_status()
-            results.append(resp.json())
-        except Exception as e:
-            results.append({"error": str(e)})
-
-    out_df = pd.DataFrame(results)
-    out_df.to_csv(output_path, index=False)
-    print(f"Saved {len(results)} predictions to {output_path}")
+    for payload in payloads:
+        response = requests.post(api_url, json=payload, timeout=30)
+        response.raise_for_status()
+        results.append(response.json())
+    return results
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Batch prediction via API")
-    parser.add_argument("--input", required=True, help="Input CSV path")
-    parser.add_argument("--output", required=True, help="Output CSV path")
-    parser.add_argument("--url", default="http://localhost:8000", help="API base URL")
+    parser = argparse.ArgumentParser(description="Batch prediction via the /predict API.")
+    parser.add_argument(
+        "--input", "-i", required=True, help="Path to JSON file with an array of applications."
+    )
+    parser.add_argument(
+        "--url", "-u", default=DEFAULT_URL, help="Base URL of the prediction API."
+    )
+    parser.add_argument(
+        "--output", "-o", help="Optional path to write results as JSON."
+    )
     args = parser.parse_args()
-    run_batch(args.input, args.output, args.url)
+
+    with open(args.input) as f:
+        payloads = json.load(f)
+
+    if not isinstance(payloads, list):
+        print("Error: input file must contain a JSON array of applications.", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"Running batch prediction for {len(payloads)} application(s)...")
+    results = send_batch(payloads, args.url)
+
+    for i, result in enumerate(results):
+        print(f"Application {i + 1}: approved={result['approved']}, "
+              f"prob={result['default_probability']}, band={result['risk_band']}")
+
+    if args.output:
+        with open(args.output, "w") as f:
+            json.dump(results, f, indent=2)
+        print(f"Results written to {args.output}")
 
 
 if __name__ == "__main__":

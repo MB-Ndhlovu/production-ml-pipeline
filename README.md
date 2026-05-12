@@ -1,37 +1,29 @@
 # Production ML Pipeline
 
-A FastAPI-powered credit scoring prediction API with health checks, real-time predictions, and batch processing support.
+A FastAPI-powered credit default prediction API with health checks, probabilistic outputs, and risk banding.
 
-## Overview
+## Quick Start
 
-This project provides a production-ready ML inference pipeline for credit default prediction. It loads pre-trained model artifacts and exposes them via a documented REST API.
-
-## Features
-
-- **Real-time Predictions** via POST `/predict`
-- **Health Checks** via GET `/health`
-- **Batch Prediction** script for processing multiple records
-- **OpenAPI Documentation** at `/docs`
-- **Risk Stratification** with low/medium/high bands
-
-## API Documentation
-
-### GET /health
-
-Returns service health status.
-
-```json
-{
-  "status": "ok",
-  "model_loaded": true
-}
+```bash
+pip install -r requirements.txt
+python run_api.py
 ```
 
-### POST /predict
+API runs at `http://localhost:8000`. Docs at `http://localhost:8000/docs`.
 
-Accepts a JSON body with applicant features and returns a credit decision.
+## Endpoints
 
-**Request body:**
+### `GET /health`
+Returns model loading status.
+
+```json
+{ "status": "ok", "model_loaded": true }
+```
+
+### `POST /predict`
+Credit default prediction.
+
+**Request:**
 ```json
 {
   "income": 65000,
@@ -54,48 +46,17 @@ Accepts a JSON body with applicant features and returns a credit decision.
 }
 ```
 
-**Risk Bands:**
-- `low`: probability < 0.15
-- `medium`: probability 0.15–0.35
-- `high`: probability > 0.35
+Risk bands: `low` (<0.15), `medium` (0.15–0.35), `high` (>0.35)
 
-## Installation
+## Testing
 
 ```bash
-pip install -r requirements.txt
-```
-
-## Running the API
-
-```bash
-python run_api.py
-```
-
-The server starts on `http://localhost:8000`. API docs available at `http://localhost:8000/docs`.
-
-## Running Tests
-
-```bash
-pytest tests/
-```
-
-## Batch Predictions
-
-```bash
-python -m src.batch --input data.csv --output predictions.csv
+pytest tests/ -v
 ```
 
 ## Deployment
 
-For production deployment, use uvicorn with workers:
-
 ```bash
-uvicorn src.api:app --host 0.0.0.0 --port 8000 --workers 4
+pip install -r requirements.txt
+uvicorn src.api:app --host 0.0.0.0 --port 8000
 ```
-
-## Model Artifacts
-
-Model artifacts are loaded from the `models/` directory:
-- `credit_model.pkl` — trained classifier
-- `scaler.pkl` — feature scaler
-- `feature_names.pkl` — expected feature names and ordering
