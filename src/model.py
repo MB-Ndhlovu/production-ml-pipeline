@@ -1,53 +1,45 @@
-"""Model loading utilities for the credit scoring pipeline."""
-
-import os
-from pathlib import Path
-from typing import Any, List
+"""Model loading utilities for the credit scoring API."""
 
 import joblib
+from pathlib import Path
 
-_MODEL_DIR = Path(__file__).parent.parent / "models"
+MODEL_DIR = Path(__file__).parent.parent / "models"
 
-_credit_model: Any = None
-_scaler: Any = None
-_feature_names: List[str] = []
-
-
-def _load_artifacts() -> None:
-    """Load all model artifacts from disk."""
-    global _credit_model, _scaler, _feature_names
-    _credit_model = joblib.load(_MODEL_DIR / "credit_model.pkl")
-    _scaler = joblib.load(_MODEL_DIR / "scaler.pkl")
-    _feature_names = joblib.load(_MODEL_DIR / "feature_names.pkl")
+_model = None
+_scaler = None
+_feature_names = None
 
 
-def get_model():
-    """Return the loaded credit_model artifact."""
-    if _credit_model is None:
-        _load_artifacts()
-    return _credit_model
+def load_model():
+    """Load the trained credit model from disk."""
+    global _model
+    if _model is None:
+        _model = joblib.load(MODEL_DIR / "credit_model.pkl")
+    return _model
 
 
-def get_scaler():
-    """Return the loaded scaler artifact."""
+def load_scaler():
+    """Load the feature scaler from disk."""
+    global _scaler
     if _scaler is None:
-        _load_artifacts()
+        _scaler = joblib.load(MODEL_DIR / "scaler.pkl")
     return _scaler
 
 
-def get_feature_names() -> List[str]:
-    """Return the ordered list of feature names."""
-    if not _feature_names:
-        _load_artifacts()
+def load_feature_names():
+    """Load the expected feature names from disk."""
+    global _feature_names
+    if _feature_names is None:
+        _feature_names = joblib.load(MODEL_DIR / "feature_names.pkl")
     return _feature_names
 
 
-def is_model_loaded() -> bool:
-    """Check whether all artifacts are loaded."""
+def is_model_loaded():
+    """Check if all model artifacts are loaded."""
     try:
-        get_model()
-        get_scaler()
-        get_feature_names()
+        load_model()
+        load_scaler()
+        load_feature_names()
         return True
     except Exception:
         return False

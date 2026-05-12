@@ -1,31 +1,27 @@
-"""FastAPI application for the credit scoring prediction API."""
+"""FastAPI application for the credit scoring service."""
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
-from src.model import is_model_loaded
-from src.predict import PredictInput, PredictOutput, predict_default
+from .model import is_model_loaded
+from .predict import PredictionInput, PredictionOutput, predict
 
 
 app = FastAPI(
-    title="Credit Default Prediction API",
-    description="Production ML pipeline for credit default probability estimation.",
+    title="Credit Scoring API",
+    description="Production ML pipeline for credit default prediction",
     version="1.0.0",
 )
 
 
-@app.get(
-    "/health",
-    summary="Health check",
-    response_model=dict,
-    responses={200: {"description": "API is healthy"}},
-)
-def health():
-    """
-    Health check endpoint.
+@app.get("/health", response_model=dict)
+async def health_check():
+    """Health check endpoint.
 
-    Returns the current status of the API and whether the model artifacts
-    have been successfully loaded.
+    Returns the service status and whether model artifacts are loaded.
+
+    Returns:
+        dict: {"status": "ok", "model_loaded": bool}
     """
     return JSONResponse(
         content={
@@ -35,22 +31,17 @@ def health():
     )
 
 
-@app.post(
-    "/predict",
-    summary="Predict credit default",
-    response_model=PredictOutput,
-    responses={200: {"description": "Prediction result"}},
-)
-def predict(input_data: PredictInput):
-    """
-    Run a credit default prediction.
+@app.post("/predict", response_model=PredictionOutput)
+async def credit_predict(input_data: PredictionInput):
+    """Credit scoring prediction endpoint.
 
-    Accepts a JSON payload with application features and returns the default
-    probability, risk band, and an approval decision.
+    Accepts applicant features and returns approval decision,
+    default probability, and risk classification.
 
-    Risk bands:
-    - **low**: probability < 0.15
-    - **medium**: 0.15 ≤ probability ≤ 0.35
-    - **high**: probability > 0.35
+    Args:
+        input_data: PredictionInput with applicant features
+
+    Returns:
+        PredictionOutput with approved, default_probability, and risk_band
     """
-    return predict_default(input_data)
+    return predict(input_data)
