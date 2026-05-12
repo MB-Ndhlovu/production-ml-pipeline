@@ -1,11 +1,13 @@
-"""FastAPI application for the credit scoring service."""
+"""FastAPI application for credit scoring predictions."""
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 
-from .model import is_model_loaded
-from .predict import PredictionInput, PredictionOutput, predict
+from src.model import load_artifacts, is_model_loaded
+from src.predict import CreditScoreInput, PredictionOutput, predict
 
+# Load model artifacts on startup
+load_artifacts()
 
 app = FastAPI(
     title="Credit Scoring API",
@@ -14,14 +16,12 @@ app = FastAPI(
 )
 
 
-@app.get("/health", response_model=dict)
-async def health_check():
-    """Health check endpoint.
+@app.get("/health", response_model=dict, tags=["health"])
+async def health():
+    """
+    Health check endpoint.
 
-    Returns the service status and whether model artifacts are loaded.
-
-    Returns:
-        dict: {"status": "ok", "model_loaded": bool}
+    Returns the service status and whether the model artifacts are loaded.
     """
     return JSONResponse(
         content={
@@ -31,17 +31,16 @@ async def health_check():
     )
 
 
-@app.post("/predict", response_model=PredictionOutput)
-async def credit_predict(input_data: PredictionInput):
-    """Credit scoring prediction endpoint.
-
-    Accepts applicant features and returns approval decision,
-    default probability, and risk classification.
-
-    Args:
-        input_data: PredictionInput with applicant features
-
-    Returns:
-        PredictionOutput with approved, default_probability, and risk_band
+@app.post("/predict", response_model=PredictionOutput, tags=["prediction"])
+async def make_prediction(input_data: CreditScoreInput):
     """
-    return predict(input_data)
+    Predict credit default risk.
+
+    Accepts applicant features and returns the approval decision,
+    default probability, and risk band.
+    """
+    try:
+        result = predict(input_data)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

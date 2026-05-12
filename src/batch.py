@@ -1,58 +1,45 @@
-"""Batch prediction script using the credit scoring API."""
+"""Batch prediction script using the API."""
 
 import argparse
-import csv
+import json
 import sys
-from pathlib import Path
 
-import requests
-
-
-def predict_from_api(url: str, payload: dict) -> dict:
-    """Send prediction request to the API."""
-    response = requests.post(f"{url}/predict", json=payload, timeout=30)
-    response.raise_for_status()
-    return response.json()
+import httpx
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Batch prediction using the credit scoring API")
-    parser.add_argument("--url", default="http://localhost:8000", help="API base URL")
-    parser.add_argument("--input", required=True, help="Input CSV file path")
-    parser.add_argument("--output", required=True, help="Output CSV file path")
-    args = parser.parse_args()
+def run_batch(base_url: str, input_file: str, output_file: str = None):
+    """
+    Send batch predictions to the /predict endpoint.
 
-    input_path = Path(args.input)
-    if not input_path.exists():
-        print(f"Error: Input file '{args.input}' not found")
-        sys.exit(1)
+    Reads input records from a JSON file (array of feature dicts),
+    posts each to the API, and optionally writes results to output_file.
+    """
+    with open(input_file, "r") as f:
+        records = json.load(f)
 
-    with open(input_path, newline="") as csvfile:
-        reader = csv.DictReader(csvfile)
-        rows = list(reader)
+    results = []
+    with httpx.Client(base_url=base_url, timeout=30.0) as client:
+        for record in records:
+            response = client.post("/predict", json=record)
+            response.raise_for_status()
+            results.append(response.json())
 
-    fieldnames = ["approved", "default_probability", "risk_band"]
-    output_path = Path(args.output)
+    if output_file:
+        with open(output_file, "w") as f:
+            json.dump(results, f, indent=2)
+        print(f"Results written to {output_file}")
+    else:
+        for r in results:
+            print(r)
 
-    with open(output_path, "w", newline="") as csvfile:
-        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-        writer.writeheader()
-
-        for i, row in enumerate(rows):
-            print(f"Processing row {i + 1}/{len(rows)}...")
-            try:
-                result = predict_from_api(args.url, row)
-                writer.writerow({
-                    "approved": result["approved"],
-                    "default_probability": result["default_probability"],
-                    "risk_band": result["risk_band"],
-                })
-            except Exception as e:
-                print(f"Error on row {i + 1}: {e}")
-                writer.writerow({"approved": "", "default_probability": "", "risk_band": ""})
-
-    print(f"Batch prediction complete. Results saved to {args.output}")
+    return results
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Batch prediction client")
+    parser.add_argument("--url", default="http://localhost:8000", help="API base URL")
+    parser.add_argument("--input", required=True, help="JSON file with input records")
+    parser.add_argument("--output", default=None, help="Output JSON file for results")
+
+    args = parser.parse_args()
+    run_batch(args.url, args.input, args.output)

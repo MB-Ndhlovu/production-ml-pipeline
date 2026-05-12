@@ -1,37 +1,14 @@
 # Production ML Pipeline with FastAPI
 
-A production-ready credit scoring API built with FastAPI, scikit-learn, and joblib.
+Credit scoring prediction API deployed as a production-ready FastAPI service.
 
 ## Overview
 
-This API serves predictions from a pre-trained credit scoring model. It accepts applicant features and returns approval decisions, default probabilities, and risk bands.
-
-## Features
-
-- **Real-time predictions** via REST API
-- **Batch prediction script** for bulk scoring
-- **Health check endpoint** for monitoring
-- **OpenAPI documentation** auto-generated
-- **Risk stratification** (low/medium/high)
-
-## Installation
-
-```bash
-pip install -r requirements.txt
-```
-
-## Run locally
-
-```bash
-python run_api.py
-```
-
-API available at `http://localhost:8000`
+REST API for credit default prediction using a trained scikit-learn pipeline. Accepts applicant features and returns approval decision, probability score, and risk band.
 
 ## API Endpoints
 
-### GET /health
-
+### `GET /health`
 Health check endpoint.
 
 **Response:**
@@ -42,11 +19,10 @@ Health check endpoint.
 }
 ```
 
-### POST /predict
+### `POST /predict`
+Predict credit default risk.
 
-Submit credit application features for scoring.
-
-**Request body:**
+**Request Body:**
 ```json
 {
   "income": 65000,
@@ -69,49 +45,33 @@ Submit credit application features for scoring.
 }
 ```
 
-**Risk bands:**
+**Risk Bands:**
 - `low`: probability < 0.15
-- `medium`: 0.15 <= probability <= 0.35
+- `medium`: probability 0.15 – 0.35
 - `high`: probability > 0.35
 
-## Batch Predictions
+## Local Development
 
 ```bash
-python src/batch.py --url http://localhost:8000 --input data.csv --output predictions.csv
+pip install -r requirements.txt
+python run_api.py
 ```
 
-## Run Tests
+API available at `http://localhost:8000`. Swagger docs at `http://localhost:8000/docs`.
+
+## Testing
 
 ```bash
-pytest tests/ -v
+pytest tests/
 ```
 
 ## Deployment
 
-### Docker (optional)
-
-```dockerfile
-FROM python:3.11-slim
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-COPY . .
-EXPOSE 8000
-CMD ["uvicorn", "src.api:app", "--host", "0.0.0.0", "--port", "8000"]
-```
-
-### Production
-
-Use gunicorn with uvicorn workers:
-
 ```bash
-gunicorn src.api:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
+pip install -r requirements.txt
+uvicorn src.api:app --host 0.0.0.0 --port 8000
 ```
 
 ## Model Artifacts
 
-Model artifacts (`credit_model.pkl`, `scaler.pkl`, `feature_names.pkl`) are loaded from the `models/` directory. These are sourced from the [credit-scoring-pipeline](https://github.com/MB-Ndhlovu/credit-scoring-pipeline) repository.
-
-## License
-
-MIT
+Model artifacts (`credit_model.pkl`, `scaler.pkl`, `feature_names.pkl`) are loaded from the [credit-scoring-pipeline](https://github.com/MB-Ndhlovu/credit-scoring-pipeline) repository at runtime.

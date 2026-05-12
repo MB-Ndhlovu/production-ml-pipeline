@@ -1,72 +1,47 @@
-"""Prediction logic and Pydantic schemas for the credit scoring API."""
+"""Prediction schema and function for credit scoring."""
 
 from enum import Enum
 from typing import List
 
 from pydantic import BaseModel, Field
 
-from .model import load_model, load_scaler, load_feature_names
-
 
 class HomeOwnership(str, Enum):
-    """Home ownership status."""
     OWN = "own"
     RENT = "rent"
     MORTGAGE = "mortgage"
+    OTHER = "other"
+
+
+class CreditScoreInput(BaseModel):
+    """Input features for a credit score prediction."""
+
+    income: float = Field(..., description="Annual income in ZAR")
+    credit_score: int = Field(..., description="Credit score (300-850)")
+    employment_years: int = Field(..., description="Years employed")
+    debt_to_income: float = Field(..., ge=0, le=1, description="Debt-to-income ratio")
+    loan_history_count: int = Field(..., ge=0, description="Number of past loans")
+    age: int = Field(..., ge=18, le=120, description="Applicant age")
+    home_ownership: HomeOwnership = Field(..., description="Home ownership status")
+    verified_income: int = Field(..., description="Income verified (0 or 1)")
 
 
 class RiskBand(str, Enum):
-    """Risk classification band."""
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
 
 
-class PredictionInput(BaseModel):
-    """Schema for credit scoring prediction request."""
-
-    income: float = Field(..., gt=0, description="Annual income")
-    credit_score: int = Field(..., ge=300, le=850, description="Credit score (300-850)")
-    employment_years: float = Field(..., ge=0, description="Years employed")
-    debt_to_income: float = Field(..., ge=0, le=1, description="Debt-to-income ratio (0-1)")
-    loan_history_count: int = Field(..., ge=0, description="Number of loans in history")
-    age: int = Field(..., ge=18, le=120, description="Applicant age")
-    home_ownership: HomeOwnership = Field(..., description="Home ownership status")
-    verified_income: int = Field(..., ge=0, le=1, description="Income verified (0 or 1)")
-
-    model_config = {
-        "json_schema_extra": {
-            "example": {
-                "income": 65000,
-                "credit_score": 720,
-                "employment_years": 5,
-                "debt_to_income": 0.28,
-                "loan_history_count": 2,
-                "age": 34,
-                "home_ownership": "rent",
-                "verified_income": 1
-            }
-        }
-    }
-
-
 class PredictionOutput(BaseModel):
-    """Schema for credit scoring prediction response."""
+    """Output of the credit score prediction."""
 
-    approved: bool = Field(..., description="Whether the application is approved")
+    approved: bool = Field(..., description="Whether the loan is approved")
     default_probability: float = Field(..., ge=0, le=1, description="Predicted probability of default")
     risk_band: RiskBand = Field(..., description="Risk classification band")
 
 
 def get_risk_band(probability: float) -> RiskBand:
-    """Determine risk band from default probability.
-
-    Args:
-        probability: Predicted default probability (0-1)
-
-    Returns:
-        RiskBand: low (<0.15), medium (0.15-0.35), or high (>0.35)
-    """
+    """Classify probability into a risk band."""
     if probability < 0.15:
         return RiskBand.LOW
     elif probability <= 0.35:
@@ -75,52 +50,43 @@ def get_risk_band(probability: float) -> RiskBand:
         return RiskBand.HIGH
 
 
-def predict(input_data: PredictionInput) -> PredictionOutput:
-    """Run credit scoring prediction on input features.
-
-    Args:
-        input_data: Validated prediction request
-
-    Returns:
-        PredictionOutput with approval decision, probability, and risk band
+def predict(input_data: CreditScoreInput) -> PredictionOutput:
     """
-    model = load_model()
-    scaler = load_scaler()
+    Run prediction on a single credit score input.
 
-    # Build feature vector matching model's expected 18 features
-    # Feature order: credit_score, annual_income, debt_to_income, employment_years,
-    # loan_amount, interest_rate, verified_income, num_credit_lines,
-    # delinquency_2yrs, loan_purpose_*, home_ownership_*
-    import numpy as np
+    Applies the scaler, computes the default probability from the model,
+    and derives the approval decision and risk band.
+    """
+    from src.model import get_model, get_scaler, get_feature_names
 
-    features = np.zeros(18)
-    features[0] = input_data.credit_score                      # credit_score
-    features[1] = input_data.income                             # annual_income
-    features[2] = input_data.debt_to_income                     # debt_to_income
-    features[3] = input_data.employment_years                    # employment_years
-    features[4] = 0                                             # loan_amount (not provided)
-    features[5] = 0                                             # interest_rate (not provided)
-    features[6] = input_data.verified_income                    # verified_income
-    features[7] = input_data.loan_history_count                 # num_credit_lines
+    model = get_model()
+    scaler = get_scaler()
+    feature_names: List[str] = get_feature_names()
 
-    # home_ownership: OWN->2, RENT->3, MORTGAGE->0, OTHER->1
-    ho = input_data.home_ownership.value.lower()
-    if ho == "own":
-        features[15] = 1
-    elif ho == "rent":
-        features[17] = 1
-    elif ho == "mortgage":
-        features[14] = 1
-    else:
-        features[16] = 1
+    # Map input to feature vector using expected feature names
+    raw_features = {
+        "income": input_data.income,
+        "credit_score": input_data.credit_score,
+        "employment_years": input_data.employment_years,
+        "debt_to_income": input_data.debt_to_income,
+        "loan_history_count": input_data.loan_history_count,
+        "age": input_data.age,
+        "home_ownership": input_data.home_ownership.value,
+        "verified_income": input_data.verified_income,
+    }
 
-    features_scaled = scaler.transform(features.reshape(1, -1))
-    probability = float(model.predict_proba(features_scaled)[0, 1])
-    risk_band = get_risk_band(probability)
+    # Build ordered feature vector using exact names from feature_names
+    import pandas as pd
+    df = pd.DataFrame([raw_features])
+    feature_vector = df.reindex(columns=feature_names, fill_value=0).values[0]
+
+    # Scale and predict
+    scaled = scaler.transform([feature_vector])
+    probability = float(model.predict_proba(scaled)[0, 1])
     approved = probability < 0.35
 
     return PredictionOutput(
         approved=approved,
-        default_probability=round(probability, 4),
-        risk_band=risk_band,
+        default_probability=round(probability, 6),
+        risk_band=get_risk_band(probability),
     )
