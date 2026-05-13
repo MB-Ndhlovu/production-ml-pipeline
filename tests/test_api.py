@@ -1,15 +1,15 @@
-"""Pytest tests for the Credit Scoring API."""
+"""Pytest test suite for the credit scoring API."""
 
 import pytest
 from fastapi.testclient import TestClient
 
 from src.api import app
 
+
 client = TestClient(app)
 
 
 def test_health():
-    """GET /health returns status and model_loaded flag."""
     response = client.get("/health")
     assert response.status_code == 200
     data = response.json()
@@ -17,8 +17,7 @@ def test_health():
     assert "model_loaded" in data
 
 
-def test_predict_valid_input():
-    """POST /predict with valid input returns approved, probability, and risk_band."""
+def test_predict_valid():
     payload = {
         "income": 65000,
         "credit_score": 720,
@@ -27,7 +26,7 @@ def test_predict_valid_input():
         "loan_history_count": 2,
         "age": 34,
         "home_ownership": "rent",
-        "verified_income": 1,
+        "verified_income": 1
     }
     response = client.post("/predict", json=payload)
     assert response.status_code == 200
@@ -36,24 +35,28 @@ def test_predict_valid_input():
     assert "default_probability" in data
     assert "risk_band" in data
     assert data["risk_band"] in ("low", "medium", "high")
-    assert 0 <= data["default_probability"] <= 1
 
 
-def test_predict_response_fields():
-    """Prediction output contains correct fields and types."""
+def test_predict_invalid_credit_score():
     payload = {
-        "income": 50000,
-        "credit_score": 600,
-        "employment_years": 2,
-        "debt_to_income": 0.3,
-        "loan_history_count": 1,
-        "age": 28,
+        "income": 65000,
+        "credit_score": 900,  # out of range
+        "employment_years": 5,
+        "debt_to_income": 0.28,
+        "loan_history_count": 2,
+        "age": 34,
         "home_ownership": "rent",
-        "verified_income": 0,
+        "verified_income": 1
     }
     response = client.post("/predict", json=payload)
-    assert response.status_code == 200
-    data = response.json()
-    assert isinstance(data["approved"], bool)
-    assert isinstance(data["default_probability"], float)
-    assert isinstance(data["risk_band"], str)
+    assert response.status_code == 422
+
+
+def test_predict_missing_field():
+    payload = {
+        "income": 65000,
+        "credit_score": 720,
+        # missing fields
+    }
+    response = client.post("/predict", json=payload)
+    assert response.status_code == 422

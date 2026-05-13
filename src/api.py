@@ -1,46 +1,35 @@
-"""FastAPI application for credit scoring predictions."""
+"""FastAPI application exposing credit scoring endpoints."""
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
-from src.model import load_artifacts, is_model_loaded
-from src.predict import CreditScoreInput, PredictionOutput, predict
+from src.predict import PredictionInput, PredictionOutput, predict, is_model_loaded
 
-# Load model artifacts on startup
-load_artifacts()
 
 app = FastAPI(
     title="Credit Scoring API",
-    description="Production ML pipeline for credit default prediction",
+    description="Production ML pipeline for credit scoring predictions.",
     version="1.0.0",
 )
 
 
-@app.get("/health", response_model=dict, tags=["health"])
-async def health():
-    """
-    Health check endpoint.
+@app.get("/health", response_model=dict, tags=["Health"])
+def health():
+    """Health check endpoint.
 
-    Returns the service status and whether the model artifacts are loaded.
+    Returns the service status and whether the model is loaded.
     """
-    return JSONResponse(
-        content={
-            "status": "ok",
-            "model_loaded": is_model_loaded(),
-        }
-    )
+    return JSONResponse({
+        "status": "ok",
+        "model_loaded": is_model_loaded()
+    })
 
 
-@app.post("/predict", response_model=PredictionOutput, tags=["prediction"])
-async def make_prediction(input_data: CreditScoreInput):
-    """
-    Predict credit default risk.
+@app.post("/predict", response_model=PredictionOutput, tags=["Prediction"])
+def predict_endpoint(input_data: PredictionInput) -> PredictionOutput:
+    """Credit scoring prediction endpoint.
 
-    Accepts applicant features and returns the approval decision,
-    default probability, and risk band.
+    Accepts applicant features and returns a credit decision including
+    default probability and risk band.
     """
-    try:
-        result = predict(input_data)
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    return predict(input_data)

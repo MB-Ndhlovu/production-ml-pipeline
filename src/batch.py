@@ -1,45 +1,37 @@
-"""Batch prediction script using the API."""
+"""Batch prediction script using the credit scoring API."""
 
-import argparse
 import json
 import sys
-
+import argparse
 import httpx
 
 
-def run_batch(base_url: str, input_file: str, output_file: str = None):
-    """
-    Send batch predictions to the /predict endpoint.
-
-    Reads input records from a JSON file (array of feature dicts),
-    posts each to the API, and optionally writes results to output_file.
-    """
-    with open(input_file, "r") as f:
-        records = json.load(f)
-
-    results = []
-    with httpx.Client(base_url=base_url, timeout=30.0) as client:
+def run_batch(url: str, records: list[dict]) -> None:
+    """Send multiple prediction requests to the /predict endpoint."""
+    with httpx.Client(base_url=url, timeout=30.0) as client:
+        results = []
         for record in records:
             response = client.post("/predict", json=record)
             response.raise_for_status()
             results.append(response.json())
 
-    if output_file:
-        with open(output_file, "w") as f:
-            json.dump(results, f, indent=2)
-        print(f"Results written to {output_file}")
-    else:
-        for r in results:
-            print(r)
+        print(json.dumps(results, indent=2))
 
-    return results
+
+def main():
+    parser = argparse.ArgumentParser(description="Batch prediction via credit scoring API")
+    parser.add_argument("--url", default="http://localhost:8000", help="API base URL")
+    parser.add_argument("file", nargs="?", help="JSON file with list of prediction records")
+    args = parser.parse_args()
+
+    if args.file:
+        with open(args.file) as f:
+            records = json.load(f)
+    else:
+        records = json.load(sys.stdin)
+
+    run_batch(args.url, records)
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Batch prediction client")
-    parser.add_argument("--url", default="http://localhost:8000", help="API base URL")
-    parser.add_argument("--input", required=True, help="JSON file with input records")
-    parser.add_argument("--output", default=None, help="Output JSON file for results")
-
-    args = parser.parse_args()
-    run_batch(args.url, args.input, args.output)
+    main()

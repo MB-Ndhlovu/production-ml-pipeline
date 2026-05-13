@@ -1,17 +1,19 @@
-# Production ML Pipeline with FastAPI
+# Production ML Pipeline
 
-Credit scoring prediction API deployed as a production-ready FastAPI service.
+A FastAPI-based credit scoring prediction API that loads pre-trained model artifacts and exposes them via REST endpoints.
 
-## Overview
+## Features
 
-REST API for credit default prediction using a trained scikit-learn pipeline. Accepts applicant features and returns approval decision, probability score, and risk band.
+- **Single prediction** via `POST /predict`
+- **Health check** via `GET /health`
+- **Batch prediction** script via `src/batch.py`
+- Auto-loaded scikit-learn model, scaler, and feature names from `models/`
 
 ## API Endpoints
 
 ### `GET /health`
-Health check endpoint.
+Returns the health status of the service and whether the model is loaded.
 
-**Response:**
 ```json
 {
   "status": "ok",
@@ -20,9 +22,9 @@ Health check endpoint.
 ```
 
 ### `POST /predict`
-Predict credit default risk.
+Accepts a JSON payload with applicant features and returns a credit decision.
 
-**Request Body:**
+**Request:**
 ```json
 {
   "income": 65000,
@@ -53,25 +55,39 @@ Predict credit default risk.
 ## Local Development
 
 ```bash
+# Install dependencies
 pip install -r requirements.txt
+
+# Run the API server
 python run_api.py
-```
 
-API available at `http://localhost:8000`. Swagger docs at `http://localhost:8000/docs`.
-
-## Testing
-
-```bash
-pytest tests/
+# Run tests
+pytest
 ```
 
 ## Deployment
 
+The API can be containerized or deployed to any Python host (e.g., Railway, Render, AWS Elastic Beanstalk).
+
 ```bash
-pip install -r requirements.txt
-uvicorn src.api:app --host 0.0.0.0 --port 8000
+uvicorn src.api:app --host 0.0.0.0 --port $PORT
 ```
 
-## Model Artifacts
+## Project Structure
 
-Model artifacts (`credit_model.pkl`, `scaler.pkl`, `feature_names.pkl`) are loaded from the [credit-scoring-pipeline](https://github.com/MB-Ndhlovu/credit-scoring-pipeline) repository at runtime.
+```
+production-ml-pipeline/
+├── models/           # Model artifact files
+├── src/
+│   ├── __init__.py
+│   ├── api.py        # FastAPI application
+│   ├── batch.py      # Batch prediction script
+│   ├── model.py      # Artifact loading
+│   └── predict.py    # Prediction logic & schemas
+├── tests/
+│   ├── __init__.py
+│   └── test_api.py   # Pytest API tests
+├── run_api.py        # Local dev server runner
+├── requirements.txt
+└── README.md
+```
