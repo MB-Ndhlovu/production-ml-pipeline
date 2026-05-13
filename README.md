@@ -1,18 +1,34 @@
-# Production ML Pipeline — Credit Risk Prediction API
+# Production ML Pipeline with FastAPI
 
-FastAPI-based REST API for real-time credit default prediction.
+Credit scoring prediction API built with FastAPI, scikit-learn, and Pydantic.
 
 ## Features
-- Real-time credit risk scoring via REST API
-- Probability-based risk banding (low / medium / high)
+
+- RESTful API for real-time credit default predictions
+- Probability scores and risk band classification
 - Health check endpoint for monitoring
-- Batch prediction support via API client
-- OpenAPI documentation at `/docs`
+- Batch prediction support
+- OpenAPI documentation
+
+## Installation
+
+```bash
+pip install -r requirements.txt
+```
+
+## Run Locally
+
+```bash
+python run_api.py
+```
+
+API available at `http://localhost:8000`
 
 ## API Endpoints
 
-### `GET /health`
-Returns service health and model loading status.
+### GET /health
+
+Health check endpoint.
 
 **Response:**
 ```json
@@ -22,8 +38,9 @@ Returns service health and model loading status.
 }
 ```
 
-### `POST /predict`
-Accept credit application features and return risk assessment.
+### POST /predict
+
+Predict credit default probability.
 
 **Request body:**
 ```json
@@ -50,26 +67,48 @@ Accept credit application features and return risk assessment.
 
 **Risk Bands:**
 - `low`: probability < 0.15
-- `medium`: probability 0.15–0.35
+- `medium`: probability 0.15 - 0.35
 - `high`: probability > 0.35
-
-## Setup
-
-```bash
-pip install -r requirements.txt
-python run_api.py
-```
-
-API available at `http://localhost:8000`. Docs at `http://localhost:8000/docs`.
 
 ## Batch Predictions
 
 ```bash
-python -m src.batch --api-url http://localhost:8000 --input data.csv --output predictions.csv
+python -m src.batch --input data.csv --output predictions.csv
 ```
 
-## Testing
+## Run Tests
 
 ```bash
-pytest tests/
+pytest tests/ -v
+```
+
+## Deployment
+
+### Docker
+
+```dockerfile
+FROM python:3.11-slim
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY . .
+CMD ["python", "run_api.py"]
+```
+
+### Production
+
+Use `uvicorn src.api:app --host 0.0.0.0 --port 8000` for production deployment.
+
+## Architecture
+
+```
+production-ml-pipeline/
+├── models/           # ML model artifacts
+├── src/              # Source code
+│   ├── api.py        # FastAPI application
+│   ├── model.py      # Model loading utilities
+│   ├── predict.py    # Prediction logic
+│   └── batch.py      # Batch processing
+├── tests/            # Unit tests
+├── run_api.py        # Development server
+└── requirements.txt  # Dependencies
 ```
