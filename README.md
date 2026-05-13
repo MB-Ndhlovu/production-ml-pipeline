@@ -1,19 +1,20 @@
-# Production ML Pipeline
+# Production ML Pipeline — Credit Risk Prediction API
 
-A FastAPI-based credit scoring prediction API that loads pre-trained model artifacts and exposes them via REST endpoints.
+FastAPI-based REST API for real-time credit default prediction.
 
 ## Features
-
-- **Single prediction** via `POST /predict`
-- **Health check** via `GET /health`
-- **Batch prediction** script via `src/batch.py`
-- Auto-loaded scikit-learn model, scaler, and feature names from `models/`
+- Real-time credit risk scoring via REST API
+- Probability-based risk banding (low / medium / high)
+- Health check endpoint for monitoring
+- Batch prediction support via API client
+- OpenAPI documentation at `/docs`
 
 ## API Endpoints
 
 ### `GET /health`
-Returns the health status of the service and whether the model is loaded.
+Returns service health and model loading status.
 
+**Response:**
 ```json
 {
   "status": "ok",
@@ -22,9 +23,9 @@ Returns the health status of the service and whether the model is loaded.
 ```
 
 ### `POST /predict`
-Accepts a JSON payload with applicant features and returns a credit decision.
+Accept credit application features and return risk assessment.
 
-**Request:**
+**Request body:**
 ```json
 {
   "income": 65000,
@@ -49,45 +50,26 @@ Accepts a JSON payload with applicant features and returns a credit decision.
 
 **Risk Bands:**
 - `low`: probability < 0.15
-- `medium`: probability 0.15 – 0.35
+- `medium`: probability 0.15–0.35
 - `high`: probability > 0.35
 
-## Local Development
+## Setup
 
 ```bash
-# Install dependencies
 pip install -r requirements.txt
-
-# Run the API server
 python run_api.py
-
-# Run tests
-pytest
 ```
 
-## Deployment
+API available at `http://localhost:8000`. Docs at `http://localhost:8000/docs`.
 
-The API can be containerized or deployed to any Python host (e.g., Railway, Render, AWS Elastic Beanstalk).
+## Batch Predictions
 
 ```bash
-uvicorn src.api:app --host 0.0.0.0 --port $PORT
+python -m src.batch --api-url http://localhost:8000 --input data.csv --output predictions.csv
 ```
 
-## Project Structure
+## Testing
 
-```
-production-ml-pipeline/
-├── models/           # Model artifact files
-├── src/
-│   ├── __init__.py
-│   ├── api.py        # FastAPI application
-│   ├── batch.py      # Batch prediction script
-│   ├── model.py      # Artifact loading
-│   └── predict.py    # Prediction logic & schemas
-├── tests/
-│   ├── __init__.py
-│   └── test_api.py   # Pytest API tests
-├── run_api.py        # Local dev server runner
-├── requirements.txt
-└── README.md
+```bash
+pytest tests/
 ```
